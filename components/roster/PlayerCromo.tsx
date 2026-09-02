@@ -137,7 +137,7 @@ export function PlayerCromo({
                   </div>
                   <h5 className="font-display mt-1 text-[11px] font-bold text-white">
                     {player.name}
-                  </h4>
+                  </h5>
                   <p className="mt-1 line-clamp-3 text-[8.5px] leading-relaxed text-white/65">
                     {player.bio || "Jugador del primer equip del CF Juneda per a la temporada 25/26."}
                   </p>

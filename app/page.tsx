@@ -9,7 +9,7 @@ import { Hero } from "@/components/Hero";
 import { BentoGrid } from "@/components/BentoGrid";
 import { EventsSection } from "@/components/EventsSection";
 import { ShopSection } from "@/components/ShopSection";
-import { RosterSection } from "@/components/RosterSection";
+import { TacticalPitchRoster } from "@/components/roster/TacticalPitchRoster";
 import { HistoriaSection } from "@/components/HistoriaSection";
 
 export default function Home() {
@@ -33,7 +33,7 @@ export default function Home() {
         <BentoGrid />
         <EventsSection />
         <ShopSection />
-        <RosterSection />
+        <TacticalPitchRoster />
         <HistoriaSection />
       </motion.main>
     </>
