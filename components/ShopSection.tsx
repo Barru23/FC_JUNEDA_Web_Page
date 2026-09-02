@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { SectionHeading } from "./EventsSection";
 import { KitViewer2D } from "./KitViewer2D";
+import { Loader2, ShoppingBag, X } from "lucide-react";
 
 type ViewType = "front" | "back";
 type SizeType = "S" | "M" | "L" | "XL" | "NEN/A";
@@ -15,25 +16,57 @@ export function ShopSection() {
   const [name, setName] = useState("");
   const [number, setNumber] = useState("");
 
+  // Checkout modal & state
+  const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerEmail, setBuyerEmail] = useState("");
+  const [buyerPhone, setBuyerPhone] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const price = 39.9;
+
   const handleCustomFocus = () => {
-    // Automatically flip to back view when editing personalisation
     setView("back");
   };
 
-  const handleBuy = () => {
-    const details = {
-      product: "1a Equipació Oficial CF Juneda",
-      price: 39.9,
-      size,
-      customized: customize,
-      customName: customize ? name.trim() || "BARRU" : undefined,
-      customNumber: customize ? number.trim() || "10" : undefined,
-    };
-    alert(
-      `Comanda iniciada per:\n- ${details.product}\n- Talla: ${details.size}\n- Personalització: ${
-        details.customized ? `${details.customName} (#${details.customNumber})` : "Cap"
-      }\n- Total: ${details.price.toFixed(2)} €`
-    );
+  const handleOpenCheckout = () => {
+    setError(null);
+    setCheckoutModalOpen(true);
+  };
+
+  const handleProcessCheckout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!buyerEmail || !buyerName) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "merch",
+          productId: "1a-equipacio",
+          size,
+          customName: customize ? name.trim() || "BARRU" : undefined,
+          customNumber: customize ? number.trim() || "10" : undefined,
+          guestName: buyerName.trim(),
+          email: buyerEmail.trim(),
+          phone: buyerPhone.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Error al tramitar la comanda");
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al connectar amb Stripe");
+      setLoading(false);
+    }
   };
 
   return (
@@ -166,18 +199,139 @@ export function ShopSection() {
                 Preu Total
               </span>
               <span className="font-display text-3xl font-extrabold text-white">
-                39.90 €
+                {price.toFixed(2)} €
               </span>
             </div>
             <button
-              onClick={handleBuy}
-              className="group relative flex items-center justify-center rounded-full bg-brand px-10 py-4 font-display text-sm font-extrabold uppercase tracking-widest text-white transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_24px_rgba(225,6,0,0.6)]"
+              onClick={handleOpenCheckout}
+              className="group relative flex items-center justify-center gap-2 rounded-full bg-brand px-10 py-4 font-display text-sm font-extrabold uppercase tracking-widest text-white transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_24px_rgba(225,6,0,0.6)]"
             >
+              <ShoppingBag size={16} />
               Comprar
             </button>
           </div>
         </div>
       </motion.div>
+
+      {/* Checkout details modal */}
+      <AnimatePresence>
+        {checkoutModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 backdrop-blur-xl"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-brand">Finalitzar comanda</span>
+                  <h4 className="font-display text-xl font-bold text-white">1a Equipació CF Juneda</h4>
+                </div>
+                <button
+                  onClick={() => setCheckoutModalOpen(false)}
+                  className="rounded-full border border-white/10 p-2 text-white/50 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Order summary pill */}
+              <div className="mb-4 rounded-xl border border-white/10 bg-black/30 p-3.5 text-xs text-white/70 space-y-1.5">
+                <div className="flex justify-between">
+                  <span>Talla seleccionada:</span>
+                  <span className="font-bold text-white">{size}</span>
+                </div>
+                {customize && (
+                  <div className="flex justify-between">
+                    <span>Personalització:</span>
+                    <span className="font-bold text-brand">{name || "BARRU"} #{number || "10"}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-white/10 pt-1.5 font-semibold text-white">
+                  <span>Total:</span>
+                  <span className="font-display text-sm text-brand">{price.toFixed(2)} €</span>
+                </div>
+              </div>
+
+              <form onSubmit={handleProcessCheckout} className="flex flex-col gap-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-white/50 mb-1">
+                    Nom i cognoms *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={buyerName}
+                    onChange={(e) => setBuyerName(e.target.value)}
+                    placeholder="Marc Rovira"
+                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-brand transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-white/50 mb-1">
+                    Correu electrònic *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={buyerEmail}
+                    onChange={(e) => setBuyerEmail(e.target.value)}
+                    placeholder="marc@exemple.cat"
+                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-brand transition-colors"
+                  />
+                  <p className="mt-1 text-[10px] text-white/35">Rebràs la confirmació i l&apos;avís de recollida per correu</p>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-white/50 mb-1">
+                    Telèfon (opcional)
+                  </label>
+                  <input
+                    type="tel"
+                    value={buyerPhone}
+                    onChange={(e) => setBuyerPhone(e.target.value)}
+                    placeholder="+34 600 000 000"
+                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-brand transition-colors"
+                  />
+                </div>
+
+                {error && (
+                  <div className="rounded-lg bg-red-500/15 border border-red-500/30 px-3.5 py-2 text-xs text-red-400">
+                    ⚠️ {error}
+                  </div>
+                )}
+
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutModalOpen(false)}
+                    className="flex-1 rounded-xl border border-white/15 py-3 text-xs font-semibold uppercase tracking-wider text-white/70 hover:bg-white/5"
+                  >
+                    Cancel·lar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading || !buyerName || !buyerEmail}
+                    className="flex-1 rounded-xl bg-brand py-3 text-xs font-extrabold uppercase tracking-widest text-white transition-all hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2"
+                  >
+                    {loading ? (
+                      <><Loader2 size={14} className="animate-spin" /> Tramitant...</>
+                    ) : (
+                      `Pagar ${price.toFixed(2)} €`
+                    )}
+                  </button>
+                </div>
+
+                <p className="text-center text-[10px] text-white/30">
+                  🔒 Pagament segur canalitzat mitjançant Stripe
+                </p>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

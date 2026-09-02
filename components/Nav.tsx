@@ -8,8 +8,9 @@ import { Crest } from "./Crest";
 const LINKS = [
   { href: "#esdeveniments", label: "Esdeveniments" },
   { href: "#botiga", label: "Botiga" },
+  { href: "#socis", label: "Fes-te Soci" },
   { href: "#plantilla", label: "Plantilla" },
-  { href: "#historia", label: "Història i Socis" },
+  { href: "#historia", label: "Història" },
 ];
 
 export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
@@ -80,6 +81,14 @@ export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
                   {link.label}
                 </motion.a>
               ))}
+              <div className="mt-8 border-t border-white/10 pt-4 w-full">
+                <a
+                  href="/admin"
+                  className="text-xs font-semibold uppercase tracking-widest text-white/40 hover:text-brand transition-colors"
+                >
+                  Panell d&apos;administració →
+                </a>
+              </div>
             </nav>
           </motion.div>
         )}

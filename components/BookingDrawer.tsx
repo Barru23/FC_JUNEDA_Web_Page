@@ -1,16 +1,16 @@
-"use client";
+﻿"use client";
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import type { ClubEvent } from "@/lib/data";
 
 const DIETARY_OPTIONS = [
-  "Cap intolerància",
-  "Vegetarià",
-  "Vegà",
+  "Cap intolerancia",
+  "Vegetaria",
+  "Vega",
   "Sense gluten",
-  "Sense làctics",
+  "Sense lactics",
 ];
 
 export function BookingDrawer({
@@ -20,12 +20,47 @@ export function BookingDrawer({
   event: ClubEvent;
   onClose: () => void;
 }) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [quantity, setQuantity] = useState(1);
   const [guestName, setGuestName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [dietary, setDietary] = useState(DIETARY_OPTIONS[0]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const total = (quantity * event.price).toFixed(2);
+  const baseTotal = quantity * event.price;
+  const fee = event.bookingFee ?? 0.75;
+  const total = baseTotal + fee;
+
+  async function handleCheckout() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "event",
+          eventId: event.id,
+          quantity,
+          guestName,
+          dietary,
+          email,
+          phone,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Error desconegut");
+      if (data.url) window.location.href = data.url;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al processar el pagament");
+      setLoading(false);
+    }
+  }
+
+  const steps = ["Tiquets", "Dietètica", "Contacte", "Confirmació"];
 
   return (
     <AnimatePresence>
@@ -43,6 +78,7 @@ export function BookingDrawer({
         exit={{ x: "100%" }}
         transition={{ type: "spring", damping: 28, stiffness: 260 }}
       >
+        {/* Header */}
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-brand">Reserva</p>
@@ -60,17 +96,20 @@ export function BookingDrawer({
           </button>
         </div>
 
+        {/* Step indicators */}
         <div className="flex gap-2 text-[11px] uppercase tracking-[0.1em] text-white/40">
-          <span className={step >= 1 ? "text-brand" : ""}>1. Tiquets</span>
-          <span>—</span>
-          <span className={step >= 2 ? "text-brand" : ""}>2. Dietètica</span>
-          <span>—</span>
-          <span className={step >= 3 ? "text-brand" : ""}>3. Confirmació</span>
+          {steps.map((label, i) => (
+            <span key={label} className={`flex items-center gap-2 ${step >= i + 1 ? "text-brand" : ""}`}>
+              {i > 0 && <span className="text-white/20">—</span>}
+              {i + 1}. {label}
+            </span>
+          ))}
         </div>
 
+        {/* Step 1: Tiquets */}
         {step === 1 && (
           <div className="flex flex-col gap-5">
-            <Field label="Nom del convidat">
+            <Field label="Nom del convidat principal">
               <input
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
@@ -101,6 +140,7 @@ export function BookingDrawer({
           </div>
         )}
 
+        {/* Step 2: Dietètica */}
         {step === 2 && (
           <Field label="Requeriments dietètics">
             <div className="flex flex-col gap-2">
@@ -127,38 +167,80 @@ export function BookingDrawer({
           </Field>
         )}
 
+        {/* Step 3: Contacte */}
         {step === 3 && (
+          <div className="flex flex-col gap-5">
+            <Field label="Correu electrònic">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nom@exemple.com"
+                className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none focus:border-brand"
+              />
+              <p className="text-xs text-white/35">Rebràs la confirmació de reserva per correu</p>
+            </Field>
+            <Field label="Telèfon (opcional)">
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+34 600 000 000"
+                className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none focus:border-brand"
+              />
+            </Field>
+          </div>
+        )}
+
+        {/* Step 4: Confirmació */}
+        {step === 4 && (
           <div className="flex flex-col gap-4 rounded-xl border border-white/10 p-5 text-sm">
             <SummaryRow label="Convidat" value={guestName || "—"} />
             <SummaryRow label="Tiquets" value={String(quantity)} />
             <SummaryRow label="Dietètica" value={dietary} />
+            <SummaryRow label="Correu" value={email} />
+            <SummaryRow label="Preu base" value={`${baseTotal.toFixed(2)} €`} />
+            <SummaryRow label="Despeses gestió" value={`${fee.toFixed(2)} €`} />
             <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-4">
               <span className="text-white/50">Total</span>
-              <span className="font-display text-xl font-bold">{total} €</span>
+              <span className="font-display text-xl font-bold">{total.toFixed(2)} €</span>
             </div>
             <p className="text-xs text-white/35">
-              El pagament amb Stripe es connectarà en la següent iteració.
+              Seràs redirigit a la plataforma de pagament segur de Stripe. 🔒
             </p>
+            {error && (
+              <p className="rounded-lg bg-red-500/15 border border-red-500/30 px-4 py-3 text-xs text-red-400">
+                ⚠️ {error}
+              </p>
+            )}
           </div>
         )}
 
+        {/* Navigation buttons */}
         <div className="mt-auto flex gap-3">
           {step > 1 && (
             <button
-              onClick={() => setStep((s) => (s - 1) as 1 | 2)}
-              className="flex-1 rounded-lg border border-white/15 py-3 text-sm font-semibold uppercase tracking-wide text-white/70"
+              onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3)}
+              disabled={loading}
+              className="flex-1 rounded-lg border border-white/15 py-3 text-sm font-semibold uppercase tracking-wide text-white/70 disabled:opacity-40"
             >
               Enrere
             </button>
           )}
           <button
-            onClick={() =>
-              step < 3 ? setStep((s) => (s + 1) as 2 | 3) : onClose()
+            onClick={() => step < 4 ? setStep((s) => (s + 1) as 2 | 3 | 4) : handleCheckout()}
+            disabled={
+              loading ||
+              (step === 1 && !guestName) ||
+              (step === 3 && !email)
             }
-            disabled={step === 1 && !guestName}
-            className="flex-1 rounded-lg bg-brand py-3 text-sm font-semibold uppercase tracking-wide text-white disabled:opacity-40"
+            className="flex-1 rounded-lg bg-brand py-3 text-sm font-semibold uppercase tracking-wide text-white disabled:opacity-40 flex items-center justify-center gap-2"
           >
-            {step < 3 ? "Continuar" : "Confirmar reserva"}
+            {loading ? (
+              <><Loader2 size={16} className="animate-spin" /> Processant...</>
+            ) : step < 4 ? "Continuar" : (
+              `Pagar ${total.toFixed(2)} €`
+            )}
           </button>
         </div>
       </motion.div>

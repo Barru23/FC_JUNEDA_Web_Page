@@ -1,3 +1,8 @@
+// ─── Type Definitions ─────────────────────────────────────────────────────────
+// These types mirror the Supabase DB schema.
+// The static sample arrays below are kept as fallbacks during development
+// but the site fetches live data from Supabase via the API routes.
+
 export type ClubEvent = {
   id: string;
   title: string;
@@ -6,6 +11,9 @@ export type ClubEvent = {
   menu: string;
   price: number;
   spotsLeft: number;
+  totalSpots?: number;
+  status?: string;
+  bookingFee?: number;
 };
 
 export type Product = {
@@ -16,9 +24,57 @@ export type Product = {
   swatches: string[];
   customizable: boolean;
   image?: string;
+  stock?: Record<string, number>;
 };
 
-export type Position = "Porters" | "Defenses" | "Migcampistes" | "Davanters" | "Cos Tècnic";
+export type MembershipTier = {
+  id: string;
+  name: string;
+  price_eur: number;
+  season: string;
+  benefits: string | null;
+  status: string;
+};
+
+export type Purchase = {
+  id: string;
+  stripe_session_id: string;
+  purchase_type: "event" | "merch" | "membership";
+  buyer_name: string;
+  buyer_email: string;
+  buyer_phone?: string;
+  event_id?: string;
+  product_id?: string;
+  tier_id?: string;
+  quantity?: number;
+  dietary?: string;
+  size?: string;
+  custom_name?: string;
+  custom_number?: string;
+  amount_eur: number;
+  payment_method?: string;
+  payment_status: "pending" | "completed" | "refunded" | "failed";
+  sheet_synced: boolean;
+  email_sent: boolean;
+  created_at: string;
+  // Joined relations
+  event?: { title: string; date: string; location: string };
+  product?: { name: string };
+  tier?: { name: string };
+};
+
+export type DashboardStats = {
+  total_revenue: number;
+  event_revenue: number;
+  merch_revenue: number;
+  membership_revenue: number;
+  tickets_sold: number;
+  merch_orders: number;
+  active_members: number;
+  recent_purchases: Purchase[];
+};
+
+export type Position = "Porters" | "Defenses" | "Migcampistes" | "Davanters" | "Cos Tècnic" | "Cos Tecnic";
 
 export type Player = {
   id: string;
@@ -28,62 +84,12 @@ export type Player = {
   bio: string;
 };
 
-// SAMPLE data — substituir per contingut real del club / CMS.
-export const events: ClubEvent[] = [
-  {
-    id: "sopar-temporada",
-    title: "Sopar de Temporada",
-    date: "28 de setembre",
-    location: "Pavelló Municipal",
-    menu: "Menú 3 plats + postres",
-    price: 18,
-    spotsLeft: 14,
-  },
-  {
-    id: "dinar-final",
-    title: "Dinar de Final de Lliga",
-    date: "14 de juny",
-    location: "Casal del Club",
-    menu: "Menú tradicional català",
-    price: 22,
-    spotsLeft: 32,
-  },
-];
-
-export const products: Product[] = [
-  {
-    id: "1a-equipacio",
-    name: "1a Equipació Vermella",
-    sizes: ["S", "M", "L", "XL", "Nen/a"],
-    price: 39.9,
-    swatches: ["#E10600", "#0A0A0B", "#FBBF24"],
-    customizable: true,
-    image: "/data/Samarretes.jpeg",
-  },
-  {
-    id: "2a-equipacio",
-    name: "2a Equipació",
-    sizes: ["S", "M", "L", "XL", "Nen/a"],
-    price: 39.9,
-    swatches: ["#0F172A", "#FBBF24"],
-    customizable: true,
-  },
-  {
-    id: "bufanda",
-    name: "Bufanda Oficial",
-    sizes: ["Única"],
-    price: 14.9,
-    swatches: ["#E10600", "#0A0A0B"],
-    customizable: false,
-  },
-];
-
-// SAMPLE data — substituir per la plantilla real.
+// SAMPLE player data — substituir per la plantilla real.
 export const players: Player[] = [
-  { id: "p9", name: "Marc Rovira", number: 9, position: "Davanters", bio: "Golejador nat, capità de l'atac des de fa tres temporades." },
-  { id: "p1", name: "Jordi Solé", number: 1, position: "Porters", bio: "Porter titular, reflexos clau en el joc aeri." },
-  { id: "p4", name: "Pau Ferrer", number: 4, position: "Defenses", bio: "Central contundent, líder de la defensa." },
-  { id: "p8", name: "Adrià Costa", number: 8, position: "Migcampistes", bio: "Motor del mig del camp, visió de joc excepcional." },
-  { id: "p11", name: "Nil Bosch", number: 11, position: "Davanters", bio: "Extrem ràpid, especialista en centres precisos." },
-  { id: "p6", name: "Toni Vidal", number: 6, position: "Cos Tècnic", bio: "Segon entrenador, responsable de la preparació física." },
+  { id: "p9",  name: "Marc Rovira", number: 9,  position: "Davanters",    bio: "Golejador nat, capita de l atac des de fa tres temporades." },
+  { id: "p1",  name: "Jordi Sole",  number: 1,  position: "Porters",      bio: "Porter titular, reflexos clau en el joc aeri." },
+  { id: "p4",  name: "Pau Ferrer",  number: 4,  position: "Defenses",     bio: "Central contundent, lider de la defensa." },
+  { id: "p8",  name: "Adria Costa", number: 8,  position: "Migcampistes", bio: "Motor del mig del camp, visio de joc excepcional." },
+  { id: "p11", name: "Nil Bosch",   number: 11, position: "Davanters",    bio: "Extrem rapid, especialista en centres precisos." },
+  { id: "p6",  name: "Toni Vidal",  number: 6,  position: "Cos Tecnic",   bio: "Segon entrenador, responsable de la preparacio fisica." },
 ];
