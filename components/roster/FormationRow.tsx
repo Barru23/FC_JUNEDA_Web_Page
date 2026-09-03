@@ -164,7 +164,6 @@ export function FormationRow({
               player={player}
               position3D={pos}
               dimmed={isDimmed}
-              isExpanded={isActive}
             />
           );
         })}

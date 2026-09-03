@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, PerformanceMonitor } from "@react-three/drei";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 
 interface PitchSceneProps {
   children: React.ReactNode;
@@ -54,6 +55,15 @@ export function PitchScene({ children }: PitchSceneProps) {
         minPolarAngle={0.7}
         maxPolarAngle={1.15}
       />
+
+      {/* Confines the glow to genuinely bright elements (the pitch's red
+          under-glow, the holo cromos' iridescent peaks) rather than washing
+          the whole scene — those are the only things drawn with
+          toneMapped=false / boosted brightness, everything else stays under
+          the threshold. */}
+      <EffectComposer>
+        <Bloom luminanceThreshold={0.65} luminanceSmoothing={0.3} intensity={0.9} mipmapBlur />
+      </EffectComposer>
     </Canvas>
   );
 }

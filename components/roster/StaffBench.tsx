@@ -2,10 +2,10 @@
 
 import React, { useMemo } from "react";
 import { Html } from "@react-three/drei";
-import { motion } from "framer-motion";
 import * as THREE from "three";
-import clsx from "clsx";
 import type { StaffMember } from "@/lib/squad";
+import { buildFrontTexture, buildBackTexture } from "@/lib/cromo-texture";
+import { CromoMesh, CARD_WIDTH, CARD_HEIGHT, usePlayerPhoto, useDisposableTexture } from "./CromoMesh";
 
 interface StaffBenchProps {
   staff: StaffMember[];
@@ -13,6 +13,87 @@ interface StaffBenchProps {
   isDimmed: boolean;
   onActivate: () => void;
   onDeactivate: () => void;
+}
+
+const STAFF_COLOR = "#1E3A8A"; // navy — Cos Tècnic's rarity tier
+
+/**
+ * The collapsed bench isn't any one person, so it gets a plain generic
+ * plaque rather than the interactive crest-reveal cromo — a static front
+ * face, no hover/flip of its own (the wrapping group already bubbles hover
+ * up to expand the bench).
+ */
+function StaffPlaque({ position3D, dimmed }: { position3D: [number, number, number]; dimmed: boolean }) {
+  const texture = useMemo(
+    () =>
+      buildFrontTexture({
+        number: "—",
+        badgeLabel: "STAFF",
+        initials: "CT",
+        name: "Cos Tècnic",
+        subtitle: "Banqueta Oficial",
+        rarityColor: STAFF_COLOR,
+      }),
+    []
+  );
+  useDisposableTexture(texture);
+
+  return (
+    <mesh position={position3D} rotation={[0, Math.PI / 4.4, 0]} scale={dimmed ? 0.9 : 1}>
+      <planeGeometry args={[CARD_WIDTH, CARD_HEIGHT]} />
+      <meshBasicMaterial map={texture} transparent opacity={dimmed ? 0.25 : 1} />
+    </mesh>
+  );
+}
+
+function StaffCromo({ member, position3D, dimmed }: { member: StaffMember; position3D: [number, number, number]; dimmed: boolean }) {
+  const initials = member.name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const photoImage = usePlayerPhoto(member.photo);
+
+  const frontTexture = useMemo(
+    () =>
+      buildFrontTexture({
+        number: "—",
+        badgeLabel: "STAFF",
+        initials,
+        name: member.name,
+        subtitle: member.role,
+        rarityColor: STAFF_COLOR,
+        photoImage,
+      }),
+    [member, initials, photoImage]
+  );
+
+  const backTexture = useMemo(
+    () =>
+      buildBackTexture({
+        number: "—",
+        headerRight: member.role,
+        name: member.name,
+        bio: member.bio || "Membre del cos tècnic del CF Juneda per a la temporada 25/26.",
+        rarityColor: STAFF_COLOR,
+      }),
+    [member]
+  );
+
+  useDisposableTexture(frontTexture);
+  useDisposableTexture(backTexture);
+
+  return (
+    <CromoMesh
+      frontTexture={frontTexture}
+      backTexture={backTexture}
+      position3D={position3D}
+      dimmed={dimmed}
+      rarityColor={STAFF_COLOR}
+    />
+  );
 }
 
 export function StaffBench({
@@ -93,64 +174,19 @@ export function StaffBench({
         </div>
       </Html>
 
-      {/* ── Estat Replegat: Cromo únic representatiu de la banqueta ── */}
+      {/* ── Estat replegat: un únic cromo representatiu de la banqueta ── */}
       {!isActive && (
-        <Html
-          transform
-          position={[7.0, 0.5, 0.0]}
-          rotation={[0, Math.PI / 4.4, 0]}
-          scale={0.34}
-          style={{ pointerEvents: "auto" }}
-          distanceFactor={11}
+        <group
+          onPointerEnter={(e) => {
+            e.stopPropagation();
+            onActivate();
+          }}
         >
-          <motion.div
-            onMouseEnter={onActivate}
-            onClick={(e) => {
-              e.stopPropagation();
-              onActivate();
-            }}
-            className={clsx(
-              "relative h-[166px] w-[124px] cursor-pointer rounded-2xl border p-3 shadow-2xl transition-all duration-200 select-none",
-              isDimmed
-                ? "border-white/5 bg-surface/70 opacity-25 scale-90 pointer-events-none"
-                : "border-white/15 bg-gradient-to-b from-[#161c2a]/95 via-[#0f1422]/95 to-[#090c14]/95 backdrop-blur-md hover:border-blue-500 hover:shadow-[0_0_24px_rgba(30,58,138,0.5)] hover:scale-105"
-            )}
-            whileHover={!isDimmed ? { y: -6 } : undefined}
-          >
-            <div className="flex h-full flex-col justify-between text-center">
-              <div className="flex items-center justify-between">
-                <span className="rounded-full border border-blue-400/40 bg-navy/40 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-blue-200">
-                  STAFF
-                </span>
-                <span className="font-display text-xs font-bold text-white/30">
-                  4 pers.
-                </span>
-              </div>
-
-              {/* Icona central de banqueta */}
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-blue-400/30 bg-gradient-to-br from-navy/50 to-carbon shadow-inner">
-                <span className="text-xl">📋</span>
-              </div>
-
-              <div>
-                <h4 className="font-display text-[12px] font-bold text-white leading-tight">
-                  Cos Tècnic
-                </h4>
-                <p className="text-[8px] uppercase tracking-wider text-white/40">
-                  Banqueta Oficial
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between border-t border-white/10 pt-1 text-[7px] font-bold uppercase tracking-widest text-white/35">
-                <span>CF JUNEDA</span>
-                <span className="text-blue-400">STAFF</span>
-              </div>
-            </div>
-          </motion.div>
-        </Html>
+          <StaffPlaque position3D={[7.0, 0.5, 0.0]} dimmed={isDimmed} />
+        </group>
       )}
 
-      {/* ── Estat Desplegat: Tots els membres del staff ── */}
+      {/* ── Estat desplegat: tots els membres del staff ── */}
       {isActive && (
         <group
           onPointerEnter={(e) => {
@@ -160,61 +196,7 @@ export function StaffBench({
         >
           {staff.map((member, index) => {
             const pos = positions[index] || [7.0, 1.25, 0];
-            const initials = member.name
-              .split(" ")
-              .map((w) => w[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase();
-
-            return (
-              <Html
-                key={member.id}
-                transform
-                position={pos}
-                rotation={[0, Math.PI / 4.4, 0]}
-                scale={0.34}
-                style={{ pointerEvents: "auto" }}
-                distanceFactor={11}
-              >
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.6, y: 15 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.6 }}
-                  transition={{ duration: 0.25, delay: index * 0.05 }}
-                  className="relative h-[166px] w-[124px] cursor-pointer rounded-2xl border border-blue-500/40 bg-gradient-to-b from-[#161c2a]/95 via-[#0f1422]/95 to-[#090c14]/95 p-3 shadow-2xl backdrop-blur-md hover:border-blue-400 hover:shadow-[0_0_24px_rgba(30,58,138,0.6)] hover:scale-105 select-none"
-                >
-                  <div className="flex h-full flex-col justify-between text-center">
-                    <div className="flex items-center justify-between">
-                      <span className="rounded-full border border-blue-400/40 bg-navy/40 px-1.5 py-0.5 text-[7.5px] font-bold uppercase tracking-wider text-blue-200">
-                        {member.role}
-                      </span>
-                      <span className="text-[10px] text-blue-400">●</span>
-                    </div>
-
-                    <div className="mx-auto flex h-13 w-13 items-center justify-center rounded-full border border-blue-400/30 bg-gradient-to-br from-navy/60 to-black shadow-inner">
-                      <span className="font-display text-sm font-extrabold tracking-wider text-white">
-                        {initials}
-                      </span>
-                    </div>
-
-                    <div>
-                      <h4 className="font-display truncate text-[11.5px] font-bold text-white leading-tight">
-                        {member.name}
-                      </h4>
-                      <p className="line-clamp-2 text-[7.5px] leading-tight text-white/50 mt-0.5">
-                        {member.bio || member.role}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-white/10 pt-1 text-[7px] font-bold uppercase tracking-widest text-white/35">
-                      <span>CF JUNEDA</span>
-                      <span className="text-blue-400">25/26</span>
-                    </div>
-                  </div>
-                </motion.div>
-              </Html>
-            );
+            return <StaffCromo key={member.id} member={member} position3D={pos} dimmed={isDimmed} />;
           })}
         </group>
       )}

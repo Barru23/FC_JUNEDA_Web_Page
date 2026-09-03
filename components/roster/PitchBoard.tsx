@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo } from "react";
+import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 /**
@@ -112,12 +113,85 @@ function createPitchTexture(): THREE.CanvasTexture | null {
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
+  // anisotropy is capped to the device's real max in PitchBoard(), below.
+  return texture;
+}
+
+/**
+ * Tileable blade-of-grass normal map — a height field of short vertical
+ * streaks (random length/offset, like mown blades) run through a Sobel
+ * gradient, the same technique lib/fabric-normal.ts uses for the shirt's
+ * knit weave. Without this the turf reads as flat painted colour no matter
+ * how good the marking artwork is.
+ */
+function createGrassNormalMap(): THREE.CanvasTexture {
+  const size = 256;
+  const heightCanvas = document.createElement("canvas");
+  heightCanvas.width = size;
+  heightCanvas.height = size;
+  const hctx = heightCanvas.getContext("2d")!;
+  hctx.fillStyle = "#808080";
+  hctx.fillRect(0, 0, size, size);
+
+  // Short randomized vertical blade streaks.
+  const bladeCount = 900;
+  for (let i = 0; i < bladeCount; i++) {
+    const x = Math.random() * size;
+    const yStart = Math.random() * size;
+    const len = 4 + Math.random() * 8;
+    const shade = 110 + Math.random() * 60;
+    hctx.strokeStyle = `rgb(${shade},${shade},${shade})`;
+    hctx.lineWidth = 1;
+    hctx.beginPath();
+    hctx.moveTo(x, yStart);
+    hctx.lineTo(x + (Math.random() - 0.5) * 2, yStart + len);
+    hctx.stroke();
+  }
+
+  const heights = hctx.getImageData(0, 0, size, size).data;
+  const at = (x: number, y: number) => heights[(((y + size) % size) * size + ((x + size) % size)) * 4] / 255;
+
+  const out = hctx.createImageData(size, size);
+  const strength = 1.6;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
+      const dy = (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1));
+      const nx = -dx * strength;
+      const ny = -dy * strength;
+      const nz = 1;
+      const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      const i = (y * size + x) * 4;
+      out.data[i] = ((nx / len) * 0.5 + 0.5) * 255;
+      out.data[i + 1] = ((ny / len) * 0.5 + 0.5) * 255;
+      out.data[i + 2] = ((nz / len) * 0.5 + 0.5) * 255;
+      out.data[i + 3] = 255;
+    }
+  }
+
+  const normalCanvas = document.createElement("canvas");
+  normalCanvas.width = size;
+  normalCanvas.height = size;
+  normalCanvas.getContext("2d")!.putImageData(out, 0, 0);
+
+  const texture = new THREE.CanvasTexture(normalCanvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(24, 36); // matches the board's 12x18 aspect
+  texture.needsUpdate = true;
   return texture;
 }
 
 export function PitchBoard() {
+  const { gl } = useThree();
   const grassTexture = useMemo(() => createPitchTexture(), []);
+  const grassNormal = useMemo(() => (typeof document === "undefined" ? null : createGrassNormalMap()), []);
+
+  // Cap to the device's real max rather than assuming every GPU supports 8x.
+  useEffect(() => {
+    const maxAniso = gl.capabilities.getMaxAnisotropy();
+    if (grassTexture) grassTexture.anisotropy = Math.min(8, maxAniso);
+    if (grassNormal) grassNormal.anisotropy = Math.min(4, maxAniso);
+  }, [gl, grassTexture, grassNormal]);
 
   const materials = useMemo(() => {
     const sideMat = new THREE.MeshStandardMaterial({
@@ -133,13 +207,15 @@ export function PitchBoard() {
     const grassMat = new THREE.MeshStandardMaterial({
       color: grassTexture ? "#ffffff" : "#2d8a4e",
       map: grassTexture,
-      roughness: 0.7,
-      metalness: 0.02,
+      normalMap: grassNormal ?? undefined,
+      normalScale: new THREE.Vector2(0.6, 0.6),
+      roughness: 0.85,
+      metalness: 0.0,
     });
 
     // Ordre per a BoxGeometry: +X, -X, +Y (gespa), -Y (fons), +Z, -Z
     return [sideMat, sideMat, grassMat, bottomMat, sideMat, sideMat];
-  }, [grassTexture]);
+  }, [grassTexture, grassNormal]);
 
   // The canvas-generated grass texture (~6MB uncompressed on the GPU) and its
   // materials are recreated only when this board mounts, but three.js never
@@ -148,9 +224,10 @@ export function PitchBoard() {
   useEffect(() => {
     return () => {
       grassTexture?.dispose();
+      grassNormal?.dispose();
       materials.forEach((m) => m.dispose());
     };
-  }, [grassTexture, materials]);
+  }, [grassTexture, grassNormal, materials]);
 
   return (
     <group position={[0, 0, 0]}>
@@ -159,10 +236,12 @@ export function PitchBoard() {
         <boxGeometry args={[12, 0.4, 18]} />
       </mesh>
 
-      {/* Vora subtil de resplendor vermell Juneda al peu del camp */}
+      {/* Vora de resplendor vermell Juneda — brightness (not opacity) does the
+          work now, with toneMapped=false so the bloom pass in PitchScene.tsx
+          actually sees it as bright rather than a clamped, tone-mapped dark red. */}
       <mesh position={[0, -0.21, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[12.4, 18.4]} />
-        <meshBasicMaterial color="#e10600" transparent opacity={0.06} />
+        <meshBasicMaterial color="#ff1a0a" transparent opacity={0.35} toneMapped={false} />
       </mesh>
     </group>
   );

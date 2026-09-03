@@ -142,6 +142,25 @@ export function TacticalPitchRoster() {
         </button>
       </div>
 
+      {/* Semantic squad list for screen readers and crawlers — WebGL text
+          (the 3D cromos, in either view mode) is invisible to both, so this
+          stays in the DOM unconditionally rather than only in the mobile
+          list fallback. */}
+      <ul className="sr-only">
+        {POSITIONS.map((pos) =>
+          rowData[pos].all.map((p) => (
+            <li key={p.id}>
+              #{p.number} {p.name} — {p.role || p.position} ({p.starter ? "Titular" : "Suplent"})
+            </li>
+          ))
+        )}
+        {staffMembers.map((s) => (
+          <li key={s.id}>
+            {s.name} — {s.role}
+          </li>
+        ))}
+      </ul>
+
       {/* ── Mode Camp 3D Principal ── */}
       {viewMode === "3d" ? (
         <div className="relative mx-auto h-[620px] w-full max-w-6xl overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#101217]/70 via-[#0a0a0d]/90 to-black p-1 shadow-2xl backdrop-blur-md sm:h-[680px] lg:h-[750px]">
