@@ -1,7 +1,6 @@
 // ─── Type Definitions ─────────────────────────────────────────────────────────
-// These types mirror the Supabase DB schema.
-// The static sample arrays below are kept as fallbacks during development
-// but the site fetches live data from Supabase via the API routes.
+// These types mirror the Supabase DB schema; the site fetches live data via
+// the API routes in app/api/.
 
 export type ClubEvent = {
   id: string;
@@ -14,17 +13,6 @@ export type ClubEvent = {
   totalSpots?: number;
   status?: string;
   bookingFee?: number;
-};
-
-export type Product = {
-  id: string;
-  name: string;
-  sizes: string[];
-  price: number;
-  swatches: string[];
-  customizable: boolean;
-  image?: string;
-  stock?: Record<string, number>;
 };
 
 export type MembershipTier = {
@@ -74,22 +62,3 @@ export type DashboardStats = {
   recent_purchases: Purchase[];
 };
 
-export type Position = "Porters" | "Defenses" | "Migcampistes" | "Davanters" | "Cos Tècnic" | "Cos Tecnic";
-
-export type Player = {
-  id: string;
-  name: string;
-  number: number;
-  position: Position;
-  bio: string;
-};
-
-// SAMPLE player data — substituir per la plantilla real.
-export const players: Player[] = [
-  { id: "p9",  name: "Marc Rovira", number: 9,  position: "Davanters",    bio: "Golejador nat, capita de l atac des de fa tres temporades." },
-  { id: "p1",  name: "Jordi Sole",  number: 1,  position: "Porters",      bio: "Porter titular, reflexos clau en el joc aeri." },
-  { id: "p4",  name: "Pau Ferrer",  number: 4,  position: "Defenses",     bio: "Central contundent, lider de la defensa." },
-  { id: "p8",  name: "Adria Costa", number: 8,  position: "Migcampistes", bio: "Motor del mig del camp, visio de joc excepcional." },
-  { id: "p11", name: "Nil Bosch",   number: 11, position: "Davanters",    bio: "Extrem rapid, especialista en centres precisos." },
-  { id: "p6",  name: "Toni Vidal",  number: 6,  position: "Cos Tecnic",   bio: "Segon entrenador, responsable de la preparacio fisica." },
-];

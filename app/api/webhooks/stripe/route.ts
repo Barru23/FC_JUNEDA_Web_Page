@@ -118,10 +118,19 @@ export async function POST(req: NextRequest) {
 
     // ─── Merch Purchase ─────────────────────────────────────────────────────────
     else if (purchaseType === "merch") {
-      const productId = meta.product_id;
+      // meta.product_id is the UUID resolved at checkout time; empty string
+      // means the lookup failed then, so re-resolve from the slug now rather
+      // than pass "" into a UUID column (Postgres 22P02).
+      let productId: string | null = meta.product_id || null;
+      if (!productId && meta.product_slug) {
+        const { data: bySlug } = await supabase.from("products").select("id").eq("slug", meta.product_slug).single();
+        productId = bySlug?.id ?? null;
+      }
 
       // Decrement stock for the size
-      const { data: product } = await supabase.from("products").select("stock").eq("id", productId).single();
+      const { data: product } = productId
+        ? await supabase.from("products").select("stock").eq("id", productId).single()
+        : { data: null };
       if (product) {
         const stock = product.stock as Record<string, number>;
         const currentStock = stock[meta.size] ?? 0;
@@ -131,7 +140,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const { data: purchase } = await supabase.from("purchases").insert({
+      const { data: purchase, error: merchInsertErr } = await supabase.from("purchases").insert({
         stripe_session_id: session.id,
         stripe_payment_id: session.payment_intent as string,
         purchase_type: "merch",
@@ -140,25 +149,28 @@ export async function POST(req: NextRequest) {
         buyer_phone: meta.buyer_phone ?? null,
         product_id: productId,
         size: meta.size,
-        custom_name: meta.custom_name ?? null,
         custom_number: meta.custom_number ?? null,
         amount_eur: amountEur,
         payment_method: session.payment_method_types?.[0] ?? "card",
         payment_status: "completed",
       }).select().single();
 
+      if (merchInsertErr) { console.error("[Webhook] Merch insert error:", merchInsertErr); }
+
       // Sync to Botiga sheet
       const masterSheetId = process.env.GOOGLE_MASTER_SHEET_ID;
       if (masterSheetId) {
         try {
-          const { data: prod } = await supabase.from("products").select("name").eq("id", productId).single();
+          const { data: prod } = productId
+            ? await supabase.from("products").select("name").eq("id", productId).single()
+            : { data: null };
           await appendPurchaseRow(`${masterSheetId}::Botiga`, {
             nom: meta.buyer_name,
             email: meta.buyer_email,
             telefon: meta.buyer_phone,
-            producte: prod?.name ?? productId,
+            producte: prod?.name ?? meta.product_slug ?? "Producte",
             talla: meta.size,
-            personalitzacio: meta.custom_name ? `${meta.custom_name} #${meta.custom_number}` : "Cap",
+            personalitzacio: meta.custom_number ? `#${meta.custom_number}` : "Cap",
             preu: amountEur,
             metode: "Targeta (Stripe)",
             estat: "Pagat ✅",
@@ -170,13 +182,15 @@ export async function POST(req: NextRequest) {
 
       // Email
       try {
-        const { data: prod } = await supabase.from("products").select("name").eq("id", productId).single();
+        const { data: prod } = productId
+          ? await supabase.from("products").select("name").eq("id", productId).single()
+          : { data: null };
         await sendMerchConfirmation({
           to: meta.buyer_email,
           buyerName: meta.buyer_name,
           productName: prod?.name ?? "",
           size: meta.size,
-          customization: meta.custom_name ? `${meta.custom_name} #${meta.custom_number}` : undefined,
+          customization: meta.custom_number ? `#${meta.custom_number}` : undefined,
           total: amountEur,
         });
         if (purchase?.id) await supabase.from("purchases").update({ email_sent: true }).eq("id", purchase.id);
@@ -185,7 +199,14 @@ export async function POST(req: NextRequest) {
 
     // ─── Membership Purchase ─────────────────────────────────────────────────
     else if (purchaseType === "membership") {
-      const tierId = meta.tier_id;
+      // meta.tier_id is the UUID resolved at checkout time; empty string
+      // means the lookup failed then — re-resolve from the slug now rather
+      // than pass "" into a UUID column (Postgres 22P02).
+      let tierId: string | null = meta.tier_id || null;
+      if (!tierId && meta.tier_slug) {
+        const { data: bySlug } = await supabase.from("membership_tiers").select("id").eq("slug", meta.tier_slug).single();
+        tierId = bySlug?.id ?? null;
+      }
 
       const { data: purchase } = await supabase.from("purchases").insert({
         stripe_session_id: session.id,
@@ -204,7 +225,9 @@ export async function POST(req: NextRequest) {
       const masterSheetId = process.env.GOOGLE_MASTER_SHEET_ID;
       if (masterSheetId) {
         try {
-          const { data: tier } = await supabase.from("membership_tiers").select("name, season").eq("id", tierId).single();
+          const { data: tier } = tierId
+            ? await supabase.from("membership_tiers").select("name, season").eq("id", tierId).single()
+            : { data: null };
           await appendPurchaseRow(`${masterSheetId}::Socis`, {
             nom: meta.buyer_name,
             email: meta.buyer_email,
@@ -222,7 +245,9 @@ export async function POST(req: NextRequest) {
 
       // Email
       try {
-        const { data: tier } = await supabase.from("membership_tiers").select("name, season").eq("id", tierId).single();
+        const { data: tier } = tierId
+          ? await supabase.from("membership_tiers").select("name, season").eq("id", tierId).single()
+          : { data: null };
         if (tier) {
           await sendMembershipWelcome({
             to: meta.buyer_email,

@@ -1,21 +1,30 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, PerformanceMonitor } from "@react-three/drei";
 
 interface PitchSceneProps {
   children: React.ReactNode;
 }
 
 export function PitchScene({ children }: PitchSceneProps) {
+  // Clamp device pixel ratio so a 3x-retina phone doesn't force full-resolution
+  // MSAA; PerformanceMonitor steps it down further if frame times sag.
+  const [dpr, setDpr] = useState<[number, number]>([1, 1.75]);
+
   return (
     <Canvas
       camera={{ position: [12, 10, 14], fov: 45 }}
       shadows
+      dpr={dpr}
       style={{ background: "transparent" }}
       gl={{ antialias: true, alpha: true }}
     >
+      <PerformanceMonitor
+        onIncline={() => setDpr([1, 1.75])}
+        onDecline={() => setDpr([1, 1])}
+      />
       {/* Il·luminació equilibrada per a l'escena tàctica */}
       <ambientLight intensity={0.65} />
       <directionalLight

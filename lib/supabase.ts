@@ -37,6 +37,7 @@ export type DbEvent = {
 
 export type DbProduct = {
   id: string;
+  slug: string;
   name: string;
   description: string | null;
   price_eur: number;
@@ -51,6 +52,7 @@ export type DbProduct = {
 
 export type DbMembershipTier = {
   id: string;
+  slug: string;
   name: string;
   price_eur: number;
   season: string;

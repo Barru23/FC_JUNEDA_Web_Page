@@ -74,13 +74,16 @@ export async function POST(req: NextRequest) {
 
       let productName = "1a Equipació Oficial CF Juneda";
       let productPrice = 39.90;
+      let productDbId: string | undefined;
+      const productSlug = productId ?? "1a-equipacio";
 
       try {
         const supabase = getSupabaseAdmin();
-        const { data: product } = await supabase.from("products").select("*").eq("id", productId ?? "1a-equipacio").single();
+        const { data: product } = await supabase.from("products").select("*").eq("slug", productSlug).single();
         if (product) {
           productName = product.name;
           productPrice = product.price_eur;
+          productDbId = product.id;
         }
       } catch (err) {
         console.warn("[Checkout] Supabase query fallback for product:", err);
@@ -96,7 +99,7 @@ export async function POST(req: NextRequest) {
         quantity: 1,
       }];
 
-      metadata = { ...metadata, product_id: productId ?? "1a-equipacio", size, custom_name: customName ?? "", custom_number: customNumber ?? "", purchase_type: "merch" };
+      metadata = { ...metadata, product_id: productDbId ?? "", product_slug: productSlug, size, custom_number: customNumber ?? "", purchase_type: "merch" };
     }
 
     // ─── Membership ───────────────────────────────────────────────────────────
@@ -104,14 +107,17 @@ export async function POST(req: NextRequest) {
       let tierName = "Soci/Sòcia CF Juneda";
       let tierPrice = 25.00;
       let season = "2025/26";
+      let tierDbId: string | undefined;
+      const tierSlug = tierId ?? "soci-general";
 
       try {
         const supabase = getSupabaseAdmin();
-        const { data: tier } = await supabase.from("membership_tiers").select("*").eq("id", tierId ?? "default").single();
+        const { data: tier } = await supabase.from("membership_tiers").select("*").eq("slug", tierSlug).single();
         if (tier) {
           tierName = tier.name;
           tierPrice = tier.price_eur;
           season = tier.season;
+          tierDbId = tier.id;
         }
       } catch (err) {
         console.warn("[Checkout] Supabase query fallback for tier:", err);
@@ -126,7 +132,7 @@ export async function POST(req: NextRequest) {
         quantity: 1,
       }];
 
-      metadata = { ...metadata, tier_id: tierId ?? "default", purchase_type: "membership" };
+      metadata = { ...metadata, tier_id: tierDbId ?? "", tier_slug: tierSlug, purchase_type: "membership" };
     }
 
     else {

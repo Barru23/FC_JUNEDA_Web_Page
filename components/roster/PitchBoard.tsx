@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
 /**
@@ -140,6 +140,17 @@ export function PitchBoard() {
     // Ordre per a BoxGeometry: +X, -X, +Y (gespa), -Y (fons), +Z, -Z
     return [sideMat, sideMat, grassMat, bottomMat, sideMat, sideMat];
   }, [grassTexture]);
+
+  // The canvas-generated grass texture (~6MB uncompressed on the GPU) and its
+  // materials are recreated only when this board mounts, but three.js never
+  // frees GPU resources on its own — dispose them if the board is ever
+  // unmounted (e.g. a route change), or they leak for the life of the page.
+  useEffect(() => {
+    return () => {
+      grassTexture?.dispose();
+      materials.forEach((m) => m.dispose());
+    };
+  }, [grassTexture, materials]);
 
   return (
     <group position={[0, 0, 0]}>

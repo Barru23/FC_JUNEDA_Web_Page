@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useState, useEffect } from "react";
+import React, { Suspense, useState, useEffect, useMemo } from "react";
 import { SectionHeading } from "@/components/EventsSection";
 import { PitchScene } from "./PitchScene";
 import { PitchBoard } from "./PitchBoard";
@@ -27,8 +27,20 @@ function useIsMobile() {
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+
+    let frame: number | null = null;
+    const onResize = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        check();
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
   }, []);
 
   return isMobile;
@@ -38,13 +50,19 @@ export function TacticalPitchRoster() {
   const [activeRow, setActiveRow] = useState<ActiveRow>(null);
   const [viewMode, setViewMode] = useState<"3d" | "list">("3d");
   const isMobile = useIsMobile();
-  const staffMembers = getStaff();
+  const staffMembers = useMemo(() => getStaff(), []);
+  const rowData = useMemo(() => {
+    const entries = FORMATION_CONFIG.map((config) => [
+      config.position,
+      { starters: getStartersByPosition(config.position), all: getAllByPosition(config.position) },
+    ] as const);
+    return Object.fromEntries(entries) as Record<SquadPosition, { starters: ReturnType<typeof getAllByPosition>; all: ReturnType<typeof getAllByPosition> }>;
+  }, []);
 
-  // En mòbil per defecte facilitem mode llista si l'usuari ho prefereix
+  // WebGL is too heavy for most phones — force the 2D list on mobile.
+  // The manual toggle below still lets a mobile user opt back into 3D.
   useEffect(() => {
-    if (isMobile) {
-      // Deixem que vegi el 3D o llista segons preferència
-    }
+    if (isMobile) setViewMode("list");
   }, [isMobile]);
 
   return (
@@ -146,14 +164,12 @@ export function TacticalPitchRoster() {
                 <FormationRow
                   key={config.position}
                   config={config}
-                  starters={getStartersByPosition(config.position)}
-                  allPlayers={getAllByPosition(config.position)}
+                  starters={rowData[config.position].starters}
+                  allPlayers={rowData[config.position].all}
                   isActive={activeRow === config.position}
                   isDimmed={activeRow !== null && activeRow !== config.position}
                   onActivate={() => setActiveRow(config.position)}
-                  onDeactivate={() => {
-                    // Mantenim l'estat si es vol fixar o tanquem
-                  }}
+                  onDeactivate={() => setActiveRow((cur) => (cur === config.position ? null : cur))}
                 />
               ))}
 
@@ -163,7 +179,7 @@ export function TacticalPitchRoster() {
                 isActive={activeRow === "Staff"}
                 isDimmed={activeRow !== null && activeRow !== "Staff"}
                 onActivate={() => setActiveRow("Staff")}
-                onDeactivate={() => {}}
+                onDeactivate={() => setActiveRow((cur) => (cur === "Staff" ? null : cur))}
               />
             </PitchScene>
           </Suspense>
@@ -192,8 +208,8 @@ export function TacticalPitchRoster() {
         /* ── Fallback Llista Responsive per a Mòbil ── */
         <div className="space-y-4">
           {POSITIONS.map((pos) => {
-            const players = getAllByPosition(pos);
-            const isExpanded = activeRow === pos || activeRow === null;
+            const players = rowData[pos].all;
+            const isExpanded = activeRow === pos;
 
             return (
               <div
@@ -264,7 +280,7 @@ export function TacticalPitchRoster() {
             </button>
 
             <AnimatePresence>
-              {(activeRow === "Staff" || activeRow === null) && (
+              {activeRow === "Staff" && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}

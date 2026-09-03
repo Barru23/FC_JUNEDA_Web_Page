@@ -2,7 +2,6 @@
 
 import React, { useMemo } from "react";
 import { Html } from "@react-three/drei";
-import { motion, AnimatePresence } from "framer-motion";
 import * as THREE from "three";
 import { PlayerCromo } from "./PlayerCromo";
 import type { SquadPlayer, SquadPosition } from "@/lib/squad";
