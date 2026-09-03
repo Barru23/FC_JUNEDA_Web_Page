@@ -5,8 +5,12 @@ import { useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 /* ─────────────────────────────────────────────
-   KitViewer2D — Interactive 360° Image Viewer
-   Pure React + Tailwind + Framer Motion
+   KitViewer2D — front/back studio photo viewer
+   Real product photography (see scripts/optimize-
+   kit-photos.mjs), so front/back is a crossfade
+   between angles of the same mannequin rather than
+   a flipping card — that suits flat vector art, not
+   a lit, shadowed photo.
    ───────────────────────────────────────────── */
 
 type ViewSide = "front" | "back";
@@ -14,23 +18,14 @@ type ViewSide = "front" | "back";
 interface KitViewer2DProps {
   view: ViewSide;
   onViewChange: (view: ViewSide) => void;
-  name: string;
-  number: string;
-  customize: boolean;
 }
 
-export function KitViewer2D({
-  view,
-  onViewChange,
-  name,
-  number,
-  customize,
-}: KitViewer2DProps) {
+export function KitViewer2D({ view, onViewChange }: KitViewer2DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStartX = useRef(0);
   const isDragging = useRef(false);
 
-  /* ── Drag / Swipe to rotate ── */
+  /* ── Drag / swipe to flip ── */
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     isDragging.current = true;
     dragStartX.current = e.clientX;
@@ -54,35 +49,29 @@ export function KitViewer2D({
     isDragging.current = false;
   }, []);
 
-  /* ── Personalisation overlay values ── */
-  const displayName = customize && name ? name.toUpperCase() : "";
-  const displayNumber = customize && number ? number : "";
-
   return (
     <div className="relative flex flex-col gap-4">
-      {/* ── Image Viewer Container ── */}
+      {/* ── Image viewer container ── */}
       <div
         ref={containerRef}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         className="relative h-[450px] w-full cursor-grab overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-black/60 via-black/40 to-black/60 backdrop-blur-sm select-none active:cursor-grabbing sm:h-[550px]"
-        style={{ perspective: "1200px" }}
       >
         <AnimatePresence mode="wait">
           {view === "front" ? (
             <motion.div
               key="front"
               className="absolute inset-0 flex items-center justify-center"
-              initial={{ rotateY: -90, opacity: 0 }}
-              animate={{ rotateY: 0, opacity: 1 }}
-              exit={{ rotateY: 90, opacity: 0 }}
-              transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-              style={{ transformStyle: "preserve-3d" }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
             >
-              <div className="relative h-[85%] w-auto aspect-[3/4]">
+              <div className="relative h-[92%] w-auto aspect-[1856/2274]">
                 <Image
-                  src="/data/jersey_front.png"
+                  src="/data/kit-front.jpg"
                   alt="Samarreta CF Juneda — Davant"
                   fill
                   sizes="(max-width: 768px) 90vw, 45vw"
@@ -96,15 +85,14 @@ export function KitViewer2D({
             <motion.div
               key="back"
               className="absolute inset-0 flex items-center justify-center"
-              initial={{ rotateY: 90, opacity: 0 }}
-              animate={{ rotateY: 0, opacity: 1 }}
-              exit={{ rotateY: -90, opacity: 0 }}
-              transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-              style={{ transformStyle: "preserve-3d" }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
             >
-              <div className="relative h-[85%] w-auto aspect-[3/4]">
+              <div className="relative h-[92%] w-auto aspect-[1856/2274]">
                 <Image
-                  src="/data/jersey_back.png"
+                  src="/data/kit-back.jpg"
                   alt="Samarreta CF Juneda — Darrere"
                   fill
                   sizes="(max-width: 768px) 90vw, 45vw"
@@ -112,40 +100,6 @@ export function KitViewer2D({
                   priority
                   draggable={false}
                 />
-
-                {/* ── Dynamic dorsal overlay ── */}
-                {customize && (displayName || displayNumber) && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    {/* Name — positioned above the number zone */}
-                    {displayName && (
-                      <span
-                        className="font-display text-white font-extrabold tracking-wider drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"
-                        style={{
-                          fontSize: "clamp(1rem, 4vw, 1.6rem)",
-                          marginTop: "-12%",
-                          textShadow: "0 2px 12px rgba(0,0,0,0.5)",
-                        }}
-                      >
-                        {displayName}
-                      </span>
-                    )}
-                    {/* Number — large, centered */}
-                    {displayNumber && (
-                      <span
-                        className="font-display text-white font-black tracking-tight drop-shadow-[0_4px_16px_rgba(0,0,0,0.7)]"
-                        style={{
-                          fontSize: "clamp(3rem, 12vw, 6.5rem)",
-                          lineHeight: 1,
-                          marginTop: displayName ? "0.1em" : "-5%",
-                          textShadow:
-                            "0 0 20px rgba(255,255,255,0.15), 0 4px 16px rgba(0,0,0,0.6)",
-                        }}
-                      >
-                        {displayNumber}
-                      </span>
-                    )}
-                  </div>
-                )}
               </div>
             </motion.div>
           )}

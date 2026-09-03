@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { type, eventId, productId, tierId, quantity, guestName, dietary, size, customName, customNumber, email, phone } = body;
+    const { type, eventId, productId, tierId, quantity, guestName, dietary, size, customNumber, email, phone } = body;
 
     if (!type || !email) {
       return NextResponse.json({ error: "Falten camps obligatoris" }, { status: 400 });
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
         console.warn("[Checkout] Supabase query fallback for product:", err);
       }
 
-      const customization = customName ? `${customName}${customNumber ? ` #${customNumber}` : ""}` : undefined;
+      const customization = customNumber ? `#${customNumber}` : undefined;
       lineItems = [{
         price_data: {
           currency: "eur",

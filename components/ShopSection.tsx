@@ -13,7 +13,6 @@ export function ShopSection() {
   const [view, setView] = useState<ViewType>("front");
   const [size, setSize] = useState<SizeType>("M");
   const [customize, setCustomize] = useState(false);
-  const [name, setName] = useState("");
   const [number, setNumber] = useState("");
 
   // Checkout modal & state
@@ -50,7 +49,6 @@ export function ShopSection() {
           type: "merch",
           productId: "1a-equipacio",
           size,
-          customName: customize ? name.trim() || "BARRU" : undefined,
           customNumber: customize ? number.trim() || "10" : undefined,
           guestName: buyerName.trim(),
           email: buyerEmail.trim(),
@@ -81,15 +79,9 @@ export function ShopSection() {
         transition={{ duration: 0.6 }}
         className="grid grid-cols-1 gap-8 rounded-3xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur-md lg:grid-cols-12 lg:p-8"
       >
-        {/* Left Panel: 2D Interactive Jersey Viewer */}
+        {/* Left Panel: Jersey Photo Viewer */}
         <div className="lg:col-span-7">
-          <KitViewer2D
-            view={view}
-            onViewChange={setView}
-            name={name}
-            number={number}
-            customize={customize}
-          />
+          <KitViewer2D view={view} onViewChange={setView} />
         </div>
 
         {/* Right Panel: Product Configurator and Checkout Form */}
@@ -156,37 +148,22 @@ export function ShopSection() {
                   }}
                   className="h-4.5 w-4.5 accent-brand rounded cursor-pointer"
                 />
-                <span>Personalitzar nom i dorsal (+0.00 €)</span>
+                <span>Personalitzar dorsal (+0.00 €)</span>
               </label>
 
               {customize && (
-                <div className="mt-4 flex gap-3">
-                  <div className="flex-grow">
-                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1">
-                      Nom
-                    </label>
-                    <input
-                      type="text"
-                      value={name}
-                      onFocus={handleCustomFocus}
-                      onChange={(e) => setName(e.target.value.substring(0, 12))}
-                      placeholder="BARRU"
-                      className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-brand transition-colors"
-                    />
-                  </div>
-                  <div className="w-1/3">
-                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1">
-                      Dorsal
-                    </label>
-                    <input
-                      type="text"
-                      value={number}
-                      onFocus={handleCustomFocus}
-                      onChange={(e) => setNumber(e.target.value.replace(/\D/g, "").substring(0, 2))}
-                      placeholder="10"
-                      className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white text-center placeholder-white/25 outline-none focus:border-brand transition-colors"
-                    />
-                  </div>
+                <div className="mt-4">
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1">
+                    Dorsal
+                  </label>
+                  <input
+                    type="text"
+                    value={number}
+                    onFocus={handleCustomFocus}
+                    onChange={(e) => setNumber(e.target.value.replace(/\D/g, "").substring(0, 2))}
+                    placeholder="10"
+                    className="w-full max-w-[120px] rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white text-center placeholder-white/25 outline-none focus:border-brand transition-colors"
+                  />
                 </div>
               )}
             </div>
@@ -244,8 +221,8 @@ export function ShopSection() {
                 </div>
                 {customize && (
                   <div className="flex justify-between">
-                    <span>Personalització:</span>
-                    <span className="font-bold text-brand">{name || "BARRU"} #{number || "10"}</span>
+                    <span>Dorsal personalitzat:</span>
+                    <span className="font-bold text-brand">#{number || "10"}</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t border-white/10 pt-1.5 font-semibold text-white">
