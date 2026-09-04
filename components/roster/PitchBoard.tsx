@@ -5,27 +5,33 @@ import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 /**
- * Genera una textura procedural de gespa amb les línies reglamentàries del camp de futbol
+ * Genera una textura procedural de gespa amb les línies reglamentàries del camp de futbol.
+ * Orientació HORITZONTAL: l'eix X del taulell (BoxGeometry) correspon a l'eix U del canvas
+ * (esquerra→dreta), i l'eix Z correspon a l'eix V — per això les porteries es dibuixen als
+ * costats esquerre/dret del canvas en lloc de dalt/baix.
  */
 function createPitchTexture(): THREE.CanvasTexture | null {
   if (typeof document === "undefined") return null;
 
   const canvas = document.createElement("canvas");
-  canvas.width = 1024;
-  canvas.height = 1536; // Proporció 2:3 coherent amb 12x18
+  canvas.width = 1536;
+  canvas.height = 1024; // Proporció 3:2 coherent amb 18x12 (camp horitzontal)
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
+  const W = 1536;
+  const H = 1024;
+
   // 1. Fons verd gespa
   ctx.fillStyle = "#2d8a4e";
-  ctx.fillRect(0, 0, 1024, 1536);
+  ctx.fillRect(0, 0, W, H);
 
-  // 2. Franges de gespa alternades (mowing stripes horitzontals)
+  // 2. Franges de gespa alternades (mowing stripes verticals, seguint la llargada del camp)
   ctx.fillStyle = "rgba(255, 255, 255, 0.035)";
   const numStripes = 18;
-  const stripeH = 1536 / numStripes;
+  const stripeW = W / numStripes;
   for (let i = 0; i < numStripes; i += 2) {
-    ctx.fillRect(0, i * stripeH, 1024, stripeH);
+    ctx.fillRect(i * stripeW, 0, stripeW, H);
   }
 
   // 3. Línies reglamentàries del camp
@@ -35,61 +41,53 @@ function createPitchTexture(): THREE.CanvasTexture | null {
   ctx.lineJoin = "round";
 
   const margin = 50;
-  const w = 1024 - margin * 2;
-  const h = 1536 - margin * 2;
+  const w = W - margin * 2;
+  const h = H - margin * 2;
 
   // Perímetre exterior
   ctx.strokeRect(margin, margin, w, h);
 
-  // Línia de mig camp
-  const centerY = 1536 / 2;
+  // Línia de mig camp (vertical — separa la meitat esquerra de la dreta)
+  const centerX = W / 2;
   ctx.beginPath();
-  ctx.moveTo(margin, centerY);
-  ctx.lineTo(1024 - margin, centerY);
+  ctx.moveTo(centerX, margin);
+  ctx.lineTo(centerX, H - margin);
   ctx.stroke();
 
   // Cercle central (radi ~90px)
   ctx.beginPath();
-  ctx.arc(512, centerY, 90, 0, Math.PI * 2);
+  ctx.arc(centerX, H / 2, 90, 0, Math.PI * 2);
   ctx.stroke();
 
   // Punt central
   ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
   ctx.beginPath();
-  ctx.arc(512, centerY, 5, 0, Math.PI * 2);
+  ctx.arc(centerX, H / 2, 5, 0, Math.PI * 2);
   ctx.fill();
 
-  // ── Porteria Superior (Davanters) ──
-  const penaltyW = 420;
-  const penaltyH = 170;
-  const goalW = 200;
-  const goalH = 65;
+  const penaltyDepth = 170; // extensió cap a l'interior del camp
+  const penaltySpan = 420; // extensió al llarg de la línia de fons
+  const goalDepth = 65;
+  const goalSpan = 200;
 
-  // Àrea gran superior
-  ctx.strokeRect((1024 - penaltyW) / 2, margin, penaltyW, penaltyH);
-  // Àrea petita superior
-  ctx.strokeRect((1024 - goalW) / 2, margin, goalW, goalH);
-  // Punt de penal superior
+  // ── Porteria Esquerra (Porters) ──
+  ctx.strokeRect(margin, (H - penaltySpan) / 2, penaltyDepth, penaltySpan);
+  ctx.strokeRect(margin, (H - goalSpan) / 2, goalDepth, goalSpan);
   ctx.beginPath();
-  ctx.arc(512, margin + 120, 4, 0, Math.PI * 2);
+  ctx.arc(margin + 120, H / 2, 4, 0, Math.PI * 2);
   ctx.fill();
-  // Arc d'àrea superior
   ctx.beginPath();
-  ctx.arc(512, margin + 120, 65, 0.65, Math.PI - 0.65);
+  ctx.arc(margin + 120, H / 2, 65, 0.65 - Math.PI / 2, Math.PI / 2 - 0.65);
   ctx.stroke();
 
-  // ── Porteria Inferior (Porter) ──
-  // Àrea gran inferior
-  ctx.strokeRect((1024 - penaltyW) / 2, 1536 - margin - penaltyH, penaltyW, penaltyH);
-  // Àrea petita inferior
-  ctx.strokeRect((1024 - goalW) / 2, 1536 - margin - goalH, goalW, goalH);
-  // Punt de penal inferior
+  // ── Porteria Dreta (Davanters) ──
+  ctx.strokeRect(W - margin - penaltyDepth, (H - penaltySpan) / 2, penaltyDepth, penaltySpan);
+  ctx.strokeRect(W - margin - goalDepth, (H - goalSpan) / 2, goalDepth, goalSpan);
   ctx.beginPath();
-  ctx.arc(512, 1536 - margin - 120, 4, 0, Math.PI * 2);
+  ctx.arc(W - margin - 120, H / 2, 4, 0, Math.PI * 2);
   ctx.fill();
-  // Arc d'àrea inferior
   ctx.beginPath();
-  ctx.arc(512, 1536 - margin - 120, 65, Math.PI + 0.65, 2 * Math.PI - 0.65);
+  ctx.arc(W - margin - 120, H / 2, 65, Math.PI / 2 + 0.65, Math.PI * 1.5 - 0.65);
   ctx.stroke();
 
   // Arcs de córner
@@ -100,15 +98,15 @@ function createPitchTexture(): THREE.CanvasTexture | null {
   ctx.stroke();
   // Córner dalt-dreta
   ctx.beginPath();
-  ctx.arc(1024 - margin, margin, cornerR, Math.PI / 2, Math.PI);
+  ctx.arc(W - margin, margin, cornerR, Math.PI / 2, Math.PI);
   ctx.stroke();
   // Córner baix-dreta
   ctx.beginPath();
-  ctx.arc(1024 - margin, 1536 - margin, cornerR, Math.PI, Math.PI * 1.5);
+  ctx.arc(W - margin, H - margin, cornerR, Math.PI, Math.PI * 1.5);
   ctx.stroke();
   // Córner baix-esquerra
   ctx.beginPath();
-  ctx.arc(margin, 1536 - margin, cornerR, Math.PI * 1.5, Math.PI * 2);
+  ctx.arc(margin, H - margin, cornerR, Math.PI * 1.5, Math.PI * 2);
   ctx.stroke();
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -176,7 +174,7 @@ function createGrassNormalMap(): THREE.CanvasTexture {
 
   const texture = new THREE.CanvasTexture(normalCanvas);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(24, 36); // matches the board's 12x18 aspect
+  texture.repeat.set(36, 24); // matches the board's 18x12 aspect (horizontal pitch)
   texture.needsUpdate = true;
   return texture;
 }
@@ -233,14 +231,14 @@ export function PitchBoard() {
     <group position={[0, 0, 0]}>
       {/* Camp com a diorama 3D */}
       <mesh material={materials} position={[0, 0, 0]} receiveShadow>
-        <boxGeometry args={[12, 0.4, 18]} />
+        <boxGeometry args={[18, 0.4, 12]} />
       </mesh>
 
       {/* Vora de resplendor vermell Juneda — brightness (not opacity) does the
           work now, with toneMapped=false so the bloom pass in PitchScene.tsx
           actually sees it as bright rather than a clamped, tone-mapped dark red. */}
       <mesh position={[0, -0.21, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[12.4, 18.4]} />
+        <planeGeometry args={[18.4, 12.4]} />
         <meshBasicMaterial color="#ff1a0a" transparent opacity={0.35} toneMapped={false} />
       </mesh>
     </group>

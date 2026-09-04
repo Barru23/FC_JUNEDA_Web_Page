@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   const body = await req.json();
-  const { title, description, event_type, date, location, menu, price_eur, total_spots, booking_fee_eur } = body;
+  const { title, description, event_type, date, location, menu, image_url, price_eur, total_spots, booking_fee_eur } = body;
 
   if (!title || !date || !location || !price_eur || !total_spots) {
     return NextResponse.json({ error: "Falten camps obligatoris" }, { status: 400 });
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     .from("events")
     .insert({
       title, description, event_type: event_type ?? "dinner",
-      date, location, menu, price_eur, total_spots,
+      date, location, menu, image_url: image_url || null, price_eur, total_spots,
       spots_remaining: total_spots,
       booking_fee_eur: booking_fee_eur ?? 0.75,
       sheet_id: sheetId,

@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import { useState, useEffect } from "react";
-import { Shield, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Crest } from "@/components/Crest";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false);
@@ -60,9 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
         <div className="relative z-10 w-full max-w-sm">
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/5">
-              <Shield size={28} className="text-brand" />
-            </div>
+            <Crest className="mx-auto mb-4 h-24 w-[65px] drop-shadow-[0_0_28px_rgba(225,6,0,0.6)]" />
             <h1 className="font-display text-2xl font-extrabold text-white">Panell d&apos;Admin</h1>
             <p className="mt-1 text-sm text-white/40">Club Futbol Juneda</p>
           </div>

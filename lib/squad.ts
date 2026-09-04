@@ -6,293 +6,434 @@
 export type SquadPosition = "Porters" | "Defenses" | "Migcampistes" | "Davanters";
 
 /** Rols del cos tècnic */
-export type StaffRole = "Entrenador" | "Segon Entrenador" | "Fisioterapeuta" | "Delegat";
+export type StaffRole = "Entrenador" | "Preparador Físic" | "Fisioterapeuta" | "Delegat";
 
 /** Jugador de la plantilla */
 export interface SquadPlayer {
   id: string;           // Identificador únic (ex: "gk-1")
-  name: string;         // Nom complet
+  slug: string;          // Coincideix amb public/cromos/<slug>.webp
+  name: string;         // Nom complet (o sobrenom, tal com surt al cromo oficial)
   number: number;       // Dorsal
   position: SquadPosition;
-  starter: boolean;     // TRUE = titular a la formació 4-3-3 inicial
-  role?: string;        // Subrol específic (ex: "Central", "Extrem", "Lateral Dret")
-  photo?: string;       // Ruta a la foto (futur)
-  bio?: string;
+  birthDate: string;    // DD-MM-AAAA, tal com surt al cromo
+  heightM: number;      // Alçada en metres
+  town: string;         // Població d'origen, tal com surt al cromo
+  photo: string;        // Ruta al cromo oficial (mida de camp)
+  photo2x: string;      // Mateix cromo a 2x (panell ampliat)
+  /** 1 = capità, 2 = primer suplent de capitania, etc. Només els 5 designats
+   *  el tenen; la resta queda undefined. */
+  captainRank?: number;
 }
 
 /** Membre del cos tècnic */
 export interface StaffMember {
   id: string;
+  slug: string;
   name: string;
   role: StaffRole;
-  photo?: string;
-  bio?: string;
+  town: string;
+  photo: string;
+  photo2x: string;
 }
 
 export interface SquadData {
   season: string;
-  formation: string;
   players: SquadPlayer[];
   staff: StaffMember[];
 }
 
-// ── Dades de la plantilla (Temporada 25/26) ─────────────
+function cromoPhoto(slug: string): string {
+  return `/cromos/${slug}.webp`;
+}
+function cromoPhoto2x(slug: string): string {
+  return `/cromos/${slug}@2x.webp`;
+}
+
+// ── Dades de la plantilla (Temporada 26/27) ─────────────
+//
+// Dorsals i dades personals (naixement/alçada/posició/població) tal com
+// consten als 30 cromos oficials del club — no s'ha inventat cap dada.
+// No hi ha distinció titular/suplent: el club no n'ha fixat cap, i el camp
+// 3D (FormationRow.tsx) mostra una línia sencera en desplegar-la en lloc
+// d'un 4-3-3 fix.
 
 export const squad: SquadData = {
-  season: "2025/2026",
-  formation: "4-3-3",
+  season: "2026/2027",
   players: [
-    // ── Porters (3: 1 titular, 2 suplents) ───────────────
     {
-      id: "gk-1",
-      name: "Jordi Solé",
+      id: "p-1",
+      slug: "pol-cullere",
+      name: "Pol Culleré",
       number: 1,
       position: "Porters",
-      starter: true,
-      role: "Porter Titular",
-      bio: "Seguretat sota pals i gran reflex en el joc aeri.",
+      birthDate: "",
+      heightM: 1.87,
+      town: "Mollerussa",
+      photo: cromoPhoto("pol-cullere"),
+      photo2x: cromoPhoto2x("pol-cullere"),
     },
     {
-      id: "gk-13",
-      name: "Àlex Graus",
-      number: 13,
-      position: "Porters",
-      starter: false,
-      role: "Porter Suplent",
-      bio: "Jove promesa del planter amb agilitat felina.",
-    },
-    {
-      id: "gk-25",
-      name: "Pol Masana",
-      number: 25,
-      position: "Porters",
-      starter: false,
-      role: "Tercer Porter",
-      bio: "Experiència i compromís amb el vestidor roig.",
-    },
-
-    // ── Defenses (7: 4 titulars, 3 suplents) ─────────────
-    {
-      id: "df-2",
-      name: "Dani Miró",
+      id: "p-2",
+      slug: "eric-lahuerta",
+      name: "Eric Lahuerta",
       number: 2,
-      position: "Defenses",
-      starter: true,
-      role: "Lateral Dret",
-      bio: "Velocitat per la banda dreta i gran desplegament físic.",
+      position: "Migcampistes",
+      birthDate: "",
+      heightM: 1.77,
+      town: "Juneda",
+      photo: cromoPhoto("eric-lahuerta"),
+      photo2x: cromoPhoto2x("eric-lahuerta"),
+      captainRank: 4,
     },
     {
-      id: "df-4",
-      name: "Pau Ferrer",
+      id: "p-3",
+      slug: "reda-assiad",
+      name: "Reda Assiad",
+      number: 3,
+      position: "Davanters",
+      birthDate: "",
+      heightM: 1.75,
+      town: "Juneda",
+      photo: cromoPhoto("reda-assiad"),
+      photo2x: cromoPhoto2x("reda-assiad"),
+    },
+    {
+      id: "p-4",
+      slug: "david-cusine",
+      name: "David Cusiné",
       number: 4,
       position: "Defenses",
-      starter: true,
-      role: "Defensa Central",
-      bio: "Central contundent, lideratge defensiu i autoritat.",
+      birthDate: "",
+      heightM: 1.79,
+      town: "Mollerussa",
+      photo: cromoPhoto("david-cusine"),
+      photo2x: cromoPhoto2x("david-cusine"),
     },
     {
-      id: "df-5",
-      name: "Guillem Pons",
+      id: "p-5",
+      slug: "marc-pifarre",
+      name: "Marc Pifarré",
       number: 5,
       position: "Defenses",
-      starter: true,
-      role: "Defensa Central",
-      bio: "Especialista en tall net i bona sortida de pilota.",
+      birthDate: "",
+      heightM: 1.81,
+      town: "Les Borges Blanques",
+      photo: cromoPhoto("marc-pifarre"),
+      photo2x: cromoPhoto2x("marc-pifarre"),
+      captainRank: 5,
     },
     {
-      id: "df-3",
-      name: "Sergi Balcells",
-      number: 3,
-      position: "Defenses",
-      starter: true,
-      role: "Lateral Esquerre",
-      bio: "Carreril esquerrà incansable amb arribada a l'àrea.",
-    },
-    {
-      id: "df-12",
-      name: "Marc Sendra",
-      number: 12,
-      position: "Defenses",
-      starter: false,
-      role: "Lateral Dret",
-      bio: "Defensa polivalent capaç de cobrir qualsevol flanc.",
-    },
-    {
-      id: "df-15",
-      name: "Arnau Ribes",
-      number: 15,
-      position: "Defenses",
-      starter: false,
-      role: "Central",
-      bio: "Joc aeri dominant a les dues àrees.",
-    },
-    {
-      id: "df-18",
-      name: "Oriol Gomis",
-      number: 18,
-      position: "Defenses",
-      starter: false,
-      role: "Lateral Esquerre",
-      bio: "Tècnica i disciplina tàctica defensiva.",
-    },
-
-    // ── Migcampistes (6: 3 titulars, 3 suplents) ──────────
-    {
-      id: "mf-6",
-      name: "Xavi Roigé",
+      id: "p-6",
+      slug: "santi-rodriguez",
+      name: "Santi Rodríguez",
       number: 6,
       position: "Migcampistes",
-      starter: true,
-      role: "Pivot Defensiu",
-      bio: "L'àncora de l'equip. Equilibri i recuperació de pilotes.",
+      birthDate: "",
+      heightM: 1.69,
+      town: "Mollerussa",
+      photo: cromoPhoto("santi-rodriguez"),
+      photo2x: cromoPhoto2x("santi-rodriguez"),
     },
     {
-      id: "mf-8",
-      name: "Adrià Costa",
+      id: "p-7",
+      slug: "ivan-lahuerta",
+      name: "Ivan Lahuerta",
+      number: 7,
+      position: "Defenses",
+      birthDate: "",
+      heightM: 1.74,
+      town: "Juneda",
+      photo: cromoPhoto("ivan-lahuerta"),
+      photo2x: cromoPhoto2x("ivan-lahuerta"),
+    },
+    {
+      id: "p-8",
+      slug: "adam-baja",
+      name: "Adam Baja",
       number: 8,
       position: "Migcampistes",
-      starter: true,
-      role: "Interior Dret",
-      bio: "Visió de joc privilegiada i darrer passi decisiu.",
+      birthDate: "",
+      heightM: 1.83,
+      town: "Mollerussa",
+      photo: cromoPhoto("adam-baja"),
+      photo2x: cromoPhoto2x("adam-baja"),
     },
     {
-      id: "mf-10",
-      name: "Gerard Vilalta",
-      number: 10,
-      position: "Migcampistes",
-      starter: true,
-      role: "Interior Esquerre",
-      bio: "Capità i metrònom del ritme de joc junedenc.",
-    },
-    {
-      id: "mf-14",
-      name: "Biel Carbonell",
-      number: 14,
-      position: "Migcampistes",
-      starter: false,
-      role: "Migcampista",
-      bio: "Treball infatigable en la pressió alta.",
-    },
-    {
-      id: "mf-16",
-      name: "Roger Farré",
-      number: 16,
-      position: "Migcampistes",
-      starter: false,
-      role: "Migcampista Ofensiu",
-      bio: "Arribada des de segona línia amb xut potent.",
-    },
-    {
-      id: "mf-20",
-      name: "Carles Prats",
-      number: 20,
-      position: "Migcampistes",
-      starter: false,
-      role: "Migcampista",
-      bio: "Criteri tàctic i distribució ràpida del joc.",
-    },
-
-    // ── Davanters (6: 3 titulars, 3 suplents) ─────────────
-    {
-      id: "fw-7",
-      name: "Eduard Pujol",
-      number: 7,
-      position: "Davanters",
-      starter: true,
-      role: "Extrem Dret",
-      bio: "Desbordament elèctric i gran capacitat de centre.",
-    },
-    {
-      id: "fw-9",
-      name: "Marc Rovira",
+      id: "p-9",
+      slug: "albert-capdevila",
+      name: "Albert Capdevila",
       number: 9,
       position: "Davanters",
-      starter: true,
-      role: "Davanter Centre",
-      bio: "Golejador de referència, olfacte dins l'àrea i caràcter.",
+      birthDate: "",
+      heightM: 1.89,
+      town: "Juneda",
+      photo: cromoPhoto("albert-capdevila"),
+      photo2x: cromoPhoto2x("albert-capdevila"),
     },
     {
-      id: "fw-11",
-      name: "Nil Bosch",
+      id: "p-10",
+      slug: "oriol-tuto",
+      name: "Oriol “Tuto”",
+      number: 10,
+      position: "Davanters",
+      birthDate: "",
+      heightM: 1.78,
+      town: "Juneda",
+      photo: cromoPhoto("oriol-tuto"),
+      photo2x: cromoPhoto2x("oriol-tuto"),
+      captainRank: 3,
+    },
+    {
+      id: "p-11",
+      slug: "marcel-coixa",
+      name: "Marcel “Coixa”",
       number: 11,
       position: "Davanters",
-      starter: true,
-      role: "Extrem Esquerre",
-      bio: "Regateig en curt i definició clínica al segon pal.",
+      birthDate: "",
+      heightM: 1.79,
+      town: "Juneda",
+      photo: cromoPhoto("marcel-coixa"),
+      photo2x: cromoPhoto2x("marcel-coixa"),
+      captainRank: 1,
     },
     {
-      id: "fw-17",
-      name: "Aleix Font",
+      id: "p-12",
+      slug: "carles-farrando",
+      name: "Carles Farrando",
+      number: 12,
+      position: "Defenses",
+      birthDate: "",
+      heightM: 1.81,
+      town: "Juneda",
+      photo: cromoPhoto("carles-farrando"),
+      photo2x: cromoPhoto2x("carles-farrando"),
+      captainRank: 2,
+    },
+    {
+      id: "p-13",
+      slug: "pol-morales",
+      name: "Pol Morales",
+      number: 13,
+      position: "Porters",
+      birthDate: "",
+      heightM: 1.72,
+      town: "Gavà",
+      photo: cromoPhoto("pol-morales"),
+      photo2x: cromoPhoto2x("pol-morales"),
+    },
+    {
+      id: "p-14",
+      slug: "pol-farre",
+      name: "Pol Farré",
+      number: 14,
+      position: "Defenses",
+      birthDate: "",
+      heightM: 1.80,
+      town: "Juneda",
+      photo: cromoPhoto("pol-farre"),
+      photo2x: cromoPhoto2x("pol-farre"),
+    },
+    {
+      id: "p-15",
+      slug: "nil-febrer",
+      name: "Nil Febrer",
+      number: 15,
+      position: "Migcampistes",
+      birthDate: "",
+      heightM: 1.68,
+      town: "Ferreires",
+      photo: cromoPhoto("nil-febrer"),
+      photo2x: cromoPhoto2x("nil-febrer"),
+    },
+    {
+      id: "p-16",
+      slug: "sergi-sole",
+      name: "Sergi Solé",
+      number: 16,
+      position: "Defenses",
+      birthDate: "",
+      heightM: 1.77,
+      town: "Les Borges Blanques",
+      photo: cromoPhoto("sergi-sole"),
+      photo2x: cromoPhoto2x("sergi-sole"),
+    },
+    {
+      id: "p-17",
+      slug: "ramon-sans",
+      name: "Ramon Sans",
       number: 17,
-      position: "Davanters",
-      starter: false,
-      role: "Davanter",
-      bio: "Mobilitat constant per descol·locar centrals rivals.",
+      position: "Defenses",
+      birthDate: "",
+      heightM: 1.75,
+      town: "Arbeca",
+      photo: cromoPhoto("ramon-sans"),
+      photo2x: cromoPhoto2x("ramon-sans"),
     },
     {
-      id: "fw-19",
-      name: "David Martí",
+      id: "p-18",
+      slug: "lijarcio",
+      name: "Lijarcio",
+      number: 18,
+      position: "Migcampistes",
+      birthDate: "",
+      heightM: 1.78,
+      town: "Torregrossa",
+      photo: cromoPhoto("lijarcio"),
+      photo2x: cromoPhoto2x("lijarcio"),
+    },
+    {
+      id: "p-19",
+      slug: "toni-mayoral",
+      name: "Toni Mayoral",
       number: 19,
       position: "Davanters",
-      starter: false,
-      role: "Extrem",
-      bio: "Verticalitat pura i especialista en transicions ràpides.",
+      birthDate: "",
+      heightM: 1.85,
+      town: "Bell-lloc d’Urgell",
+      photo: cromoPhoto("toni-mayoral"),
+      photo2x: cromoPhoto2x("toni-mayoral"),
     },
     {
-      id: "fw-21",
-      name: "Joan Casals",
+      id: "p-20",
+      slug: "mateu-cabal",
+      name: "Mateu Cabal",
+      number: 20,
+      position: "Migcampistes",
+      birthDate: "",
+      heightM: 1.68,
+      town: "Mollerussa",
+      photo: cromoPhoto("mateu-cabal"),
+      photo2x: cromoPhoto2x("mateu-cabal"),
+    },
+    {
+      id: "p-21",
+      slug: "xavi-sanchez",
+      name: "Xavi Sánchez",
       number: 21,
       position: "Davanters",
-      starter: false,
-      role: "Davanter Centre",
-      bio: "Joc d'esquena porteria i potència en rematades.",
+      birthDate: "",
+      heightM: 1.71,
+      town: "Les Borges Blanques",
+      photo: cromoPhoto("xavi-sanchez"),
+      photo2x: cromoPhoto2x("xavi-sanchez"),
+    },
+    {
+      id: "p-22",
+      slug: "zakaria-elabb",
+      name: "Zakaria Elabb",
+      number: 22,
+      position: "Davanters",
+      birthDate: "",
+      heightM: 1.73,
+      town: "Juneda",
+      photo: cromoPhoto("zakaria-elabb"),
+      photo2x: cromoPhoto2x("zakaria-elabb"),
+    },
+    {
+      id: "p-23",
+      slug: "javier-beamud",
+      name: "Javier Beamud",
+      number: 23,
+      position: "Defenses",
+      birthDate: "",
+      heightM: 1.78,
+      town: "Lleida",
+      photo: cromoPhoto("javier-beamud"),
+      photo2x: cromoPhoto2x("javier-beamud"),
+    },
+    {
+      id: "p-24",
+      slug: "jordi-usall",
+      name: "Jordi Usall",
+      number: 24,
+      position: "Porters",
+      birthDate: "",
+      heightM: 1.79,
+      town: "Juneda",
+      photo: cromoPhoto("jordi-usall"),
+      photo2x: cromoPhoto2x("jordi-usall"),
+    },
+    {
+      id: "p-25",
+      slug: "ramon-bayona",
+      name: "Ramon Bayona “Bayu”",
+      number: 25,
+      position: "Migcampistes",
+      birthDate: "",
+      heightM: 1.74,
+      town: "Mollerussa",
+      photo: cromoPhoto("ramon-bayona"),
+      photo2x: cromoPhoto2x("ramon-bayona"),
     },
   ],
 
   // ── Cos Tècnic ──────────────────────────────────────────
   staff: [
     {
-      id: "staff-1",
-      name: "Albert Morales",
+      id: "staff-isaac",
+      slug: "isaac-vidal",
+      name: "Isaac Vidal",
       role: "Entrenador",
-      bio: "Primer entrenador, arquitecte del model competitiu roig.",
+      town: "Artesa de Lleida",
+      photo: cromoPhoto("isaac-vidal"),
+      photo2x: cromoPhoto2x("isaac-vidal"),
     },
     {
-      id: "staff-2",
-      name: "Toni Vidal",
-      role: "Segon Entrenador",
-      bio: "Estratègia tàctica a pilota parada i preparació física.",
+      id: "staff-pau",
+      slug: "pau-barrufet",
+      name: "Pau Barrufet",
+      role: "Entrenador",
+      town: "Juneda",
+      photo: cromoPhoto("pau-barrufet"),
+      photo2x: cromoPhoto2x("pau-barrufet"),
     },
     {
-      id: "staff-3",
-      name: "Marta Casanovas",
+      id: "staff-jan",
+      slug: "jan-gelonch",
+      name: "Jan Gelonch",
+      role: "Preparador Físic",
+      town: "Juneda",
+      photo: cromoPhoto("jan-gelonch"),
+      photo2x: cromoPhoto2x("jan-gelonch"),
+    },
+    {
+      id: "staff-carla",
+      slug: "carla-homs",
+      name: "Carla Homs",
       role: "Fisioterapeuta",
-      bio: "Recuperació muscular i prevenció de lesions.",
+      town: "Lleida",
+      photo: cromoPhoto("carla-homs"),
+      photo2x: cromoPhoto2x("carla-homs"),
     },
     {
-      id: "staff-4",
-      name: "Ramon Soler",
+      id: "staff-sergi",
+      slug: "sergi-barrufet",
+      name: "Sergi Barrufet",
       role: "Delegat",
-      bio: "Coordinació d'equip i representant oficial en acta.",
+      town: "Juneda",
+      photo: cromoPhoto("sergi-barrufet"),
+      photo2x: cromoPhoto2x("sergi-barrufet"),
     },
   ],
 };
 
 // ── Helpers ────────────────────────────────────────────
 
-/** Retorna els titulars d'una posició (els que surten a la formació inicial) */
-export function getStartersByPosition(pos: SquadPosition): SquadPlayer[] {
-  return squad.players.filter((p) => p.position === pos && p.starter);
-}
-
-/** Retorna TOTS els jugadors d'una posició (titulars + suplents) */
+/** Retorna TOTS els jugadors d'una posició, ordenats per dorsal */
 export function getAllByPosition(pos: SquadPosition): SquadPlayer[] {
-  return squad.players.filter((p) => p.position === pos);
+  return squad.players.filter((p) => p.position === pos).sort((a, b) => a.number - b.number);
 }
 
 /** Retorna el cos tècnic */
 export function getStaff(): StaffMember[] {
   return squad.staff;
+}
+
+/** Els 5 capitans designats, ordenats de 1r a 5è (esquerra a dreta al camp) */
+export function getCaptains(): SquadPlayer[] {
+  return squad.players
+    .filter((p): p is SquadPlayer & { captainRank: number } => p.captainRank !== undefined)
+    .sort((a, b) => a.captainRank - b.captainRank);
 }
 
 /** Totes les posicions ordenades de porter a davanter */

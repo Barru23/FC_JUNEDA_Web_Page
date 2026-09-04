@@ -6,17 +6,24 @@ import * as THREE from "three";
 
 /**
  * Foil-card shader: fresnel (view-angle-driven rim) × a slow animated
- * iridescent hue sweep × a mask confining the shimmer to the crest/dorsal
- * area (rather than washing over the whole card). Unlike a CSS
+ * iridescent hue sweep × a mask confining the shimmer to the card's own
+ * frame (rather than washing over the whole card). Unlike a CSS
  * mix-blend-mode foil effect, this genuinely responds to the real camera
  * angle and the scene's lights, because it runs per-pixel against the
  * actual view vector.
  *
  * `opacity` drives the crest <-> player crossfade (PlayerCromo.tsx swaps two
  * of these layered on top of each other); `maskStrength` scales how much of
- * the card the shimmer is allowed to touch (there's no separate mask
- * texture — dead simple radial mask centred on the card, cheapest way to
- * keep the effect from overwhelming the whole face).
+ * the card the shimmer is allowed to touch. The mask itself is derived from
+ * the card texture's own pixels — saturated and not near-white — rather
+ * than a fixed shape: the club's real cromos put the player's photo (mid
+ * tones, often the near-white studio backdrop) in the middle of the card
+ * and the saturated red/navy frame around the edge, the opposite of the old
+ * procedurally-drawn cards this replaced (dark all over, bright avatar
+ * ring in the middle). A radial mask centred on the card would land the
+ * shimmer squarely on the photo and blow it out; reading the texture
+ * instead keeps the shimmer on the frame for both the player (red) and
+ * staff (navy) templates without hard-coding either one.
  */
 
 const VERTEX = /* glsl */ `
@@ -56,11 +63,14 @@ const FRAGMENT = /* glsl */ `
 
     float fresnel = pow(1.0 - clamp(dot(vNormalView, vViewDir), 0.0, 1.0), 2.2);
 
-    // Radial mask centred on the card — cheapest stand-in for a real
-    // crest/dorsal mask texture, keeps the shimmer off the plain edges.
-    vec2 centered = vUv - 0.5;
-    float radial = 1.0 - smoothstep(0.15, 0.42, length(centered * vec2(1.0, 1.3)));
-    float mask = radial * uMaskStrength;
+    // Frame mask: brightest on saturated, non-near-white pixels — the card's
+    // red/navy frame and printed panels — and zero on the photo/white areas.
+    float maxC = max(base.r, max(base.g, base.b));
+    float minC = min(base.r, min(base.g, base.b));
+    float saturation = maxC - minC;
+    float luma = dot(base.rgb, vec3(0.299, 0.587, 0.114));
+    float frameness = clamp(saturation * 2.2, 0.0, 1.0) * (1.0 - smoothstep(0.72, 0.94, luma));
+    float mask = frameness * uMaskStrength;
 
     float hue = fract(uTime * 0.06 + vUv.x * 1.4 + vUv.y * 0.6 + fresnel * 2.0);
     vec3 iridescent = hsv2rgb(vec3(hue, 0.55, 1.0));

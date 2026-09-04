@@ -57,7 +57,7 @@ export function KitViewer2D({ view, onViewChange }: KitViewer2DProps) {
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        className="relative h-[450px] w-full cursor-grab overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-black/60 via-black/40 to-black/60 backdrop-blur-sm select-none active:cursor-grabbing sm:h-[550px]"
+        className="relative h-[450px] w-full cursor-grab overflow-hidden rounded-2xl border border-black/10 bg-white select-none active:cursor-grabbing sm:h-[550px]"
       >
         <AnimatePresence mode="wait">
           {view === "front" ? (
@@ -104,26 +104,6 @@ export function KitViewer2D({ view, onViewChange }: KitViewer2DProps) {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* ── Drag hint indicator ── */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full border border-white/5 bg-black/50 px-3 py-1.5 backdrop-blur-md">
-          <svg
-            className="h-3.5 w-3.5 text-white/40"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M8 7l-4 5 4 5M16 7l4 5-4 5"
-            />
-          </svg>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">
-            Arrossega per girar
-          </span>
-        </div>
       </div>
 
       {/* ── View selector buttons ── */}

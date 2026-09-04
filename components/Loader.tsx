@@ -50,7 +50,7 @@ export function Loader({ onComplete }: { onComplete: () => void }) {
 
       <motion.div
         layoutId="crest"
-        className="relative z-10 h-[120px] w-[103px]"
+        className="relative z-10 h-[130px] w-[89px]"
         animate={{ scale: [1, 1.035, 1] }}
         transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
       >

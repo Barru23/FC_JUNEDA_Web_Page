@@ -11,24 +11,11 @@ export function EventsSection() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // /api/events already returns ClubEvent-shaped objects (merged from the
+    // content/events.json catalogue + live Supabase spots) — see lib/events.ts.
     fetch("/api/events")
       .then((r) => r.json())
-      .then((data: unknown[]) => {
-        // Map DB format to ClubEvent format
-        const mapped: ClubEvent[] = (data as Record<string, unknown>[]).map((e) => ({
-          id: e.id as string,
-          title: e.title as string,
-          date: e.date as string,
-          location: e.location as string,
-          menu: (e.menu as string) ?? "",
-          price: e.price_eur as number,
-          spotsLeft: e.spots_remaining as number,
-          totalSpots: e.total_spots as number,
-          status: e.status as string,
-          bookingFee: e.booking_fee_eur as number,
-        }));
-        setEvents(mapped);
-      })
+      .then((data: ClubEvent[]) => setEvents(data))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -58,8 +45,16 @@ export function EventsSection() {
               >
                 <div
                   className="h-32 rounded-xl relative overflow-hidden"
-                  style={{ background: "linear-gradient(160deg, rgba(225,6,0,0.35), rgba(10,10,11,0.9))" }}
+                  style={
+                    event.imageUrl
+                      ? undefined
+                      : { background: "linear-gradient(160deg, rgba(225,6,0,0.35), rgba(10,10,11,0.9))" }
+                  }
                 >
+                  {event.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={event.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  )}
                   {soldOut && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/60">
                       <span className="rounded-full bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white/70">

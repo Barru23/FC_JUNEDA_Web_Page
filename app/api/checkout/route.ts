@@ -1,6 +1,9 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { getCatalogueEntry, syncEventCatalogue } from "@/lib/events";
+import { getMembershipTier } from "@/lib/memberships";
+import type { DbEvent } from "@/lib/supabase";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,31 +20,42 @@ export async function POST(req: NextRequest) {
     let metadata: Record<string, string> = { type, buyer_email: email, buyer_name: guestName ?? "", buyer_phone: phone ?? "" };
 
     // ─── Event Ticket ─────────────────────────────────────────────────────────
+    // eventId is the catalogue slug (see lib/events.ts / content/events.json)
+    // — the Supabase row's real UUID (needed for metadata.event_id, which the
+    // webhook uses for decrement_spots + the purchases FK) is looked up here.
     if (type === "event") {
       if (!eventId || !quantity) return NextResponse.json({ error: "Falten dades de l'esdeveniment" }, { status: 400 });
 
-      let eventTitle = "Tiquet Esdeveniment CF Juneda";
-      let eventDate = "Proximament";
-      let eventLocation = "Juneda";
-      let priceEur = 18.00;
-      let bookingFeeEur = 0.75;
+      const catalogueEntry = getCatalogueEntry(eventId);
+      if (!catalogueEntry) return NextResponse.json({ error: "Esdeveniment no trobat" }, { status: 404 });
+
+      let eventRow: DbEvent | undefined;
 
       try {
         const supabase = getSupabaseAdmin();
-        const { data: event } = await supabase.from("events").select("*").eq("id", eventId).single();
-        if (event) {
-          eventTitle = event.title;
-          eventDate = event.date;
-          eventLocation = event.location;
-          priceEur = event.price_eur;
-          bookingFeeEur = event.booking_fee_eur ?? 0.75;
-          if (event.spots_remaining < quantity) {
-            return NextResponse.json({ error: "No hi ha prou places disponibles" }, { status: 409 });
-          }
-        }
+        await syncEventCatalogue(supabase);
+        const { data: event } = await supabase.from("events").select("*").eq("slug", eventId).single();
+        if (event) eventRow = event as DbEvent;
       } catch (err) {
-        console.warn("[Checkout] Supabase query fallback for event:", err);
+        console.warn("[Checkout] Supabase query failed for event:", err);
       }
+
+      if (!eventRow) {
+        return NextResponse.json({ error: "Esdeveniment no disponible per a la venda en aquest moment" }, { status: 503 });
+      }
+      if (eventRow.spots_remaining < quantity) {
+        return NextResponse.json({ error: "No hi ha prou places disponibles" }, { status: 409 });
+      }
+
+      // The DB row wins whenever it has a value — it's what the admin panel
+      // edits and what the public site now displays (lib/events.ts's
+      // mergeEvent); the catalogue only fills in what a bare row lacks.
+      const eventDbId = eventRow.id;
+      const eventTitle = eventRow.title ?? catalogueEntry.title;
+      const eventDate = eventRow.date ?? catalogueEntry.date;
+      const eventLocation = eventRow.location ?? catalogueEntry.location;
+      const priceEur = eventRow.price_eur ?? catalogueEntry.priceEur;
+      const bookingFeeEur = eventRow.booking_fee_eur ?? catalogueEntry.bookingFeeEur;
 
       lineItems = [
         {
@@ -65,7 +79,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      metadata = { ...metadata, event_id: eventId, quantity: String(quantity), dietary: dietary ?? "", purchase_type: "event" };
+      metadata = { ...metadata, event_id: eventDbId, quantity: String(quantity), dietary: dietary ?? "", purchase_type: "event" };
     }
 
     // ─── Merchandise ──────────────────────────────────────────────────────────
@@ -104,11 +118,13 @@ export async function POST(req: NextRequest) {
 
     // ─── Membership ───────────────────────────────────────────────────────────
     else if (type === "membership") {
-      let tierName = "Soci/Sòcia CF Juneda";
-      let tierPrice = 25.00;
-      let season = "2025/26";
-      let tierDbId: string | undefined;
       const tierSlug = tierId ?? "soci-general";
+      const catalogueTier = getMembershipTier(tierSlug);
+
+      let tierName = catalogueTier?.name ?? "Soci General";
+      let tierPrice = catalogueTier?.price_eur ?? 110.00;
+      let season = catalogueTier?.season ?? "2026/27";
+      let tierDbId: string | undefined;
 
       try {
         const supabase = getSupabaseAdmin();

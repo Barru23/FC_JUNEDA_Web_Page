@@ -3,8 +3,20 @@
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
 
+// A misconfigured or unreachable project (wrong URL, placeholder
+// credentials, a Supabase outage) should fail fast instead of hanging —
+// postgrest-js's own `db.timeout` bounds every request AND (unlike a
+// homemade AbortSignal on a custom `fetch`) is recognized internally as a
+// deliberate abort, so it skips postgrest-js's built-in retry-with-backoff
+// (3 retries by default on network errors) rather than tripping it 4x in a
+// row. `retry: false` on top is belt-and-suspenders for the same reason.
+const SUPABASE_TIMEOUT_MS = 5000;
+const dbOptions = { timeout: SUPABASE_TIMEOUT_MS, retry: false } as const;
+
 // Client-side client (limited permissions via Row Level Security)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  db: dbOptions,
+});
 
 // Server-side admin client (full permissions — use only in API routes)
 export function getSupabaseAdmin() {
@@ -13,6 +25,7 @@ export function getSupabaseAdmin() {
 
   return createClient(url, serviceKey, {
     auth: { persistSession: false },
+    db: dbOptions,
   });
 }
 
@@ -20,12 +33,14 @@ export function getSupabaseAdmin() {
 
 export type DbEvent = {
   id: string;
+  slug: string | null;
   title: string;
   description: string | null;
   event_type: "dinner" | "lunch" | "party" | "other";
   date: string;
   location: string;
   menu: string | null;
+  image_url: string | null;
   price_eur: number;
   total_spots: number;
   spots_remaining: number;

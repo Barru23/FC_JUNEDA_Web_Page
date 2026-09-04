@@ -1,0 +1,87 @@
+[
+  {
+    "slug": "soci-general",
+    "name": "Soci General",
+    "price_eur": 110.0,
+    "season": "2026/27",
+    "badge": "General",
+    "icon": "Users",
+    "target": "Adults i aficionats generals",
+    "description": "La modalitat clàssica per a tots els aficionats que volen viure cada partit de l'equip a casa i formar part activa del club.",
+    "benefits": [
+      "Accés lliure a tots els partits de lliga a casa de la temporada 2026/27",
+      "Carnet físic i digital oficial del CF Juneda",
+      "Dret a veu i vot a l'Assemblea General del Club",
+      "Descomptes exclusius a la botiga oficial i en esdeveniments"
+    ],
+    "status": "active"
+  },
+  {
+    "slug": "soci-infantil",
+    "name": "Soci Infantil",
+    "price_eur": 30.0,
+    "season": "2026/27",
+    "badge": "Fins a 12 anys",
+    "icon": "Smile",
+    "target": "Nens i nenes fins a 12 anys",
+    "description": "Pensat especialment per als més petits de la família, per transmetre la passió roja des de ben petits.",
+    "benefits": [
+      "Entrada lliure a tots els partits a casa",
+      "Carnet infantil personalitzat",
+      "Participació en sortejos i activitats infantils del club",
+      "Detall de benvinguda de la temporada"
+    ],
+    "status": "active"
+  },
+  {
+    "slug": "soci-jove",
+    "name": "Soci Jove",
+    "price_eur": 60.0,
+    "season": "2026/27",
+    "badge": "13 a 25 anys",
+    "icon": "GraduationCap",
+    "target": "Joves i estudiants (13 a 25 anys)",
+    "description": "Per a la joventut que dona veu i energia a la grada a cada enfrontament.",
+    "benefits": [
+      "Accés a tots els partits a casa de la temporada 2026/27",
+      "Carnet jove oficial del CF Juneda",
+      "Participació directa en iniciatives i animació de la Grada Jove",
+      "Preus especials en desplaçaments del club"
+    ],
+    "status": "active"
+  },
+  {
+    "slug": "soci-protector",
+    "name": "Soci Protector",
+    "price_eur": 140.0,
+    "season": "2026/27",
+    "badge": "Suport Club",
+    "icon": "Shield",
+    "target": "Màxim suport al projecte esportiu",
+    "description": "Per a les persones i col·laboradors que volen fer una aportació addicional per impulsar el primer equip i el planter.",
+    "benefits": [
+      "Accés preferent a tots els partits a casa de la temporada 2026/27",
+      "Carnet daurat commemoratiu de Soci Protector",
+      "Menció d'honor d'agraïment al club",
+      "Aportació directa al futbol base i creixement de l'entitat"
+    ],
+    "status": "active"
+  },
+  {
+    "slug": "soci-afiliats-efi",
+    "name": "Soci Afiliats EFI",
+    "price_eur": 80.0,
+    "season": "2026/27",
+    "badge": "Famílies EFI",
+    "icon": "Handshake",
+    "target": "Famílies de l'Escola de Futbol Intercomarcal (EFI)",
+    "description": "Quota bonificada per a pares, mares i familiars de jugadors/es del futbol base EFI.",
+    "benefits": [
+      "Quota reduïda especial per a familiars de jugadors/es EFI",
+      "Accés a tots els partits de lliga a casa del 1r equip",
+      "Carnet oficial d'afiliat EFI",
+      "Enllaç directe entre l'escola de futbol base i el primer equip"
+    ],
+    "status": "active"
+  }
+]

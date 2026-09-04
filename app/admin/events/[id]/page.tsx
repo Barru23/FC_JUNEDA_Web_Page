@@ -6,6 +6,7 @@ import {
   Utensils, Users, CheckCircle, Clock, RefreshCw, Loader2
 } from "lucide-react";
 import type { Purchase } from "@/lib/data";
+import { Crest } from "@/components/Crest";
 
 function getToken(): string {
   return sessionStorage.getItem("admin_token") ?? "";
@@ -66,7 +67,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   const filteredPurchases = purchases.filter((p) => {
     if (dietaryFilter === "all") return true;
-    if (dietaryFilter === "intolerances") return p.dietary && p.dietary !== "Cap intoler‡ncia";
+    if (dietaryFilter === "intolerances") return p.dietary && p.dietary !== "Cap intoler√†ncia";
     return p.dietary === dietaryFilter;
   });
 
@@ -78,7 +79,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   function exportCSV() {
     if (!purchases.length) return;
-    const headers = ["Nom", "Email", "TelËfon", "Tiquets", "DietËtica", "Import (Ä)", "MËtode", "Estat", "Data"];
+    const headers = ["Nom", "Email", "Tel√®fon", "Tiquets", "Diet√®tica", "Import (‚Ç¨)", "M√®tode", "Estat", "Data"];
     const rows = purchases.map((p) => [
       p.buyer_name,
       p.buyer_email,
@@ -112,6 +113,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {/* Header */}
       <header className="border-b border-white/10 bg-black/30 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-4">
+          <Crest className="h-7 w-[19px] shrink-0" />
           <a
             href="/admin"
             className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 transition-colors"
@@ -159,8 +161,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             </div>
             <div className="flex items-center gap-3">
               <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-right">
-                <span className="block text-[10px] uppercase tracking-wider text-white/40">RecaptaciÛ</span>
-                <span className="font-display text-xl font-bold text-white">{totalRevenue.toFixed(2)} Ä</span>
+                <span className="block text-[10px] uppercase tracking-wider text-white/40">Recaptaci√≥</span>
+                <span className="font-display text-xl font-bold text-white">{totalRevenue.toFixed(2)} ‚Ç¨</span>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-right">
                 <span className="block text-[10px] uppercase tracking-wider text-white/40">Places Ocupades</span>
@@ -193,9 +195,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex flex-wrap gap-1.5 bg-white/5 rounded-xl p-1 text-xs">
               {[
                 { key: "all", label: "Tots" },
-                { key: "intolerances", label: "Amb Intoler‡ncies" },
+                { key: "intolerances", label: "Amb Intoler√†ncies" },
                 { key: "Sense gluten", label: "Sense Gluten" },
-                { key: "Vegetari‡", label: "Vegetari‡" },
+                { key: "Vegetari√†", label: "Vegetari√†" },
               ].map((f) => (
                 <button
                   key={f.key}
@@ -222,15 +224,15 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     <th className="pb-3 pl-2">Assistent</th>
                     <th className="pb-3">Contacte</th>
                     <th className="pb-3 text-center">Tiquets</th>
-                    <th className="pb-3">Requeriment DietËtic</th>
+                    <th className="pb-3">Requeriment Diet√®tic</th>
                     <th className="pb-3 text-right">Import</th>
-                    <th className="pb-3 text-center">MËtode</th>
+                    <th className="pb-3 text-center">M√®tode</th>
                     <th className="pb-3 text-right pr-2">Estat</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {filteredPurchases.map((p) => {
-                    const hasDiet = p.dietary && p.dietary !== "Cap intoler‡ncia";
+                    const hasDiet = p.dietary && p.dietary !== "Cap intoler√†ncia";
                     return (
                       <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="py-3.5 pl-2 font-semibold text-white">{p.buyer_name}</td>
@@ -242,18 +244,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         <td className="py-3.5">
                           {hasDiet ? (
                             <span className="rounded-full bg-yellow-500/15 border border-yellow-500/30 px-2.5 py-0.5 text-xs font-medium text-yellow-400">
-                              ?? {p.dietary}
+                              ‚ö†Ô∏è {p.dietary}
                             </span>
                           ) : (
-                            <span className="text-xs text-white/35">Est‡ndard</span>
+                            <span className="text-xs text-white/35">Est√†ndard</span>
                           )}
                         </td>
-                        <td className="py-3.5 text-right font-semibold text-white">{p.amount_eur.toFixed(2)} Ä</td>
+                        <td className="py-3.5 text-right font-semibold text-white">{p.amount_eur.toFixed(2)} ‚Ç¨</td>
                         <td className="py-3.5 text-center text-xs">
                           {p.payment_method === "cash" ? (
-                            <span className="rounded-md bg-white/10 px-2 py-0.5 text-white/70">Efectiu ??</span>
+                            <span className="rounded-md bg-white/10 px-2 py-0.5 text-white/70">Efectiu üíµ</span>
                           ) : (
-                            <span className="rounded-md bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 text-blue-400">Targeta ??</span>
+                            <span className="rounded-md bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 text-blue-400">Targeta üí≥</span>
                           )}
                         </td>
                         <td className="py-3.5 text-right pr-2">

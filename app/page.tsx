@@ -11,7 +11,6 @@ import { EventsSection } from "@/components/EventsSection";
 import { ShopSection } from "@/components/ShopSection";
 import { SocisSection } from "@/components/SocisSection";
 import { TacticalPitchRoster } from "@/components/roster/TacticalPitchRoster";
-import { HistoriaSection } from "@/components/HistoriaSection";
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -32,11 +31,10 @@ export default function Home() {
       >
         <Hero />
         <BentoGrid />
-        <EventsSection />
         <ShopSection />
+        <EventsSection />
         <SocisSection />
         <TacticalPitchRoster />
-        <HistoriaSection />
       </motion.main>
     </>
   );

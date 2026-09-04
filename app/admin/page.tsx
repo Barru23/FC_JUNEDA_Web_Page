@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
-  TrendingUp, Ticket, ShoppingBag, Users, Plus, ExternalLink,
+  Ticket, ShoppingBag, Users, Plus, ExternalLink,
   RefreshCw, FileDown, Calendar, Loader2, CheckCircle, Clock,
-  Euro, ChevronRight, X
+  Euro, ChevronRight, X, Pencil, PackageCheck
 } from "lucide-react";
 import type { DashboardStats, Purchase } from "@/lib/data";
+import { Crest } from "@/components/Crest";
 
 function getToken(): string {
   return sessionStorage.getItem("admin_token") ?? "";
@@ -73,10 +75,29 @@ function PurchaseRow({ p }: { p: Purchase }) {
   );
 }
 
-// ─── Create Event Modal ───────────────────────────────────────────────────────
-function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+// ─── Event Modal (create or edit) ──────────────────────────────────────────────
+type AdminEvent = {
+  id: string; title: string; description?: string | null; event_type?: string;
+  date: string; location: string; menu?: string | null; image_url?: string | null;
+  price_eur: number; total_spots: number; spots_remaining: number;
+  booking_fee_eur: number; status: string; sheet_id?: string;
+};
+
+function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: () => void; onSaved: () => void }) {
+  const isEdit = !!event;
   const [form, setForm] = useState({
-    title: "", date: "", location: "", menu: "", price_eur: "", total_spots: "", booking_fee_eur: "0.75", event_type: "dinner",
+    title: event?.title ?? "",
+    description: event?.description ?? "",
+    date: event?.date ?? "",
+    location: event?.location ?? "",
+    menu: event?.menu ?? "",
+    image_url: event?.image_url ?? "",
+    price_eur: event ? String(event.price_eur) : "",
+    total_spots: event ? String(event.total_spots) : "",
+    booking_fee_eur: event ? String(event.booking_fee_eur) : "0.75",
+    event_type: event?.event_type ?? "dinner",
+    spots_remaining: event ? String(event.spots_remaining) : "",
+    status: event?.status ?? "active",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,14 +109,26 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
     setLoading(true);
     setError(null);
     try {
+      const payload: Record<string, unknown> = {
+        title: form.title, description: form.description, event_type: form.event_type,
+        date: form.date, location: form.location, menu: form.menu,
+        image_url: form.image_url.trim() || null,
+        price_eur: parseFloat(form.price_eur), total_spots: parseInt(form.total_spots),
+        booking_fee_eur: parseFloat(form.booking_fee_eur),
+      };
+      if (isEdit) {
+        payload.id = event!.id;
+        payload.spots_remaining = parseInt(form.spots_remaining);
+        payload.status = form.status;
+      }
       const res = await fetch("/api/admin/events", {
-        method: "POST",
+        method: isEdit ? "PATCH" : "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ ...form, price_eur: parseFloat(form.price_eur), total_spots: parseInt(form.total_spots), booking_fee_eur: parseFloat(form.booking_fee_eur) }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      onCreated();
+      onSaved();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error");
     } finally {
@@ -107,19 +140,23 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-surface p-6">
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-surface p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-display text-xl font-bold text-white">Nou Esdeveniment</h2>
+          <h2 className="font-display text-xl font-bold text-white">{isEdit ? "Editar Esdeveniment" : "Nou Esdeveniment"}</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className="label">Nom de l&apos;esdeveniment *</label>
-            <input className={inputCls} value={form.title} onChange={e => set("title", e.target.value)} required placeholder="Sopar de Temporada 2025/26" />
+            <input className={inputCls} value={form.title} onChange={e => set("title", e.target.value)} required placeholder="Sopar de Temporada 2026/27" />
+          </div>
+          <div className="col-span-2">
+            <label className="label">Descripció</label>
+            <input className={inputCls} value={form.description} onChange={e => set("description", e.target.value)} placeholder="El sopar anual del club per celebrar la temporada" />
           </div>
           <div>
             <label className="label">Data *</label>
-            <input className={inputCls} value={form.date} onChange={e => set("date", e.target.value)} required placeholder="28 de setembre de 2025" />
+            <input className={inputCls} value={form.date} onChange={e => set("date", e.target.value)} required placeholder="28 de setembre de 2026" />
           </div>
           <div>
             <label className="label">Tipus</label>
@@ -138,6 +175,14 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <label className="label">Menú</label>
             <input className={inputCls} value={form.menu} onChange={e => set("menu", e.target.value)} placeholder="Menú 3 plats + postres + vi" />
           </div>
+          <div className="col-span-2">
+            <label className="label">URL de la imatge</label>
+            <input className={inputCls} value={form.image_url} onChange={e => set("image_url", e.target.value)} placeholder="https://..." />
+            {form.image_url.trim() && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={form.image_url.trim()} alt="" className="mt-2 h-24 w-full rounded-lg object-cover" onError={(e) => (e.currentTarget.style.display = "none")} onLoad={(e) => (e.currentTarget.style.display = "block")} />
+            )}
+          </div>
           <div>
             <label className="label">Preu (€) *</label>
             <input className={inputCls} type="number" step="0.01" value={form.price_eur} onChange={e => set("price_eur", e.target.value)} required placeholder="18.00" />
@@ -150,11 +195,135 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <label className="label">Taxa de gestió (€)</label>
             <input className={inputCls} type="number" step="0.01" value={form.booking_fee_eur} onChange={e => set("booking_fee_eur", e.target.value)} placeholder="0.75" />
           </div>
+          {isEdit && (
+            <div>
+              <label className="label">Places disponibles</label>
+              <input className={inputCls} type="number" value={form.spots_remaining} onChange={e => set("spots_remaining", e.target.value)} />
+            </div>
+          )}
+          {isEdit && (
+            <div className="col-span-2">
+              <label className="label">Estat</label>
+              <select className={inputCls} value={form.status} onChange={e => set("status", e.target.value)}>
+                <option value="active">Actiu</option>
+                <option value="sold_out">Exhaurit</option>
+                <option value="cancelled">Cancel·lat</option>
+              </select>
+            </div>
+          )}
           {error && <p className="col-span-2 text-xs text-red-400 bg-red-500/10 rounded px-3 py-2">{error}</p>}
           <div className="col-span-2 flex gap-3 mt-2">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-white/15 py-3 text-sm text-white/70">Cancel·lar</button>
             <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-brand py-3 text-sm font-bold text-white disabled:opacity-40 flex items-center justify-center gap-2">
-              {loading ? <><Loader2 size={14} className="animate-spin" />Creant...</> : "Crear Esdeveniment"}
+              {loading ? <><Loader2 size={14} className="animate-spin" />Desant...</> : isEdit ? "Desar Canvis" : "Crear Esdeveniment"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Product Modal (edit) ──────────────────────────────────────────────────────
+type AdminProduct = {
+  id: string; name: string; description?: string | null; price_eur: number;
+  sizes: string[]; stock: Record<string, number>; status: string;
+};
+
+function ProductModal({ product, onClose, onSaved }: { product: AdminProduct; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    name: product.name,
+    description: product.description ?? "",
+    price_eur: String(product.price_eur),
+    status: product.status,
+    stock: { ...product.stock },
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const setStock = (size: string, v: string) => setForm((f) => ({ ...f, stock: { ...f.stock, [size]: parseInt(v) || 0 } }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/products", {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          id: product.id,
+          name: form.name,
+          description: form.description,
+          price_eur: parseFloat(form.price_eur),
+          status: form.status,
+          stock: form.stock,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      onSaved();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const inputCls = "w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-brand transition-colors";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-surface p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="font-display text-xl font-bold text-white">Editar Producte</h2>
+          <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
+        </div>
+        <form onSubmit={submit} className="flex flex-col gap-3">
+          <div>
+            <label className="label">Nom *</label>
+            <input className={inputCls} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+          </div>
+          <div>
+            <label className="label">Descripció</label>
+            <input className={inputCls} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Preu (€) *</label>
+              <input className={inputCls} type="number" step="0.01" value={form.price_eur} onChange={e => setForm(f => ({ ...f, price_eur: e.target.value }))} required />
+            </div>
+            <div>
+              <label className="label">Estat</label>
+              <select className={inputCls} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                <option value="active">Actiu</option>
+                <option value="out_of_stock">Exhaurit</option>
+                <option value="hidden">Amagat</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="label">Estoc per talla</label>
+            <div className="grid grid-cols-3 gap-2 mt-1">
+              {Object.keys(form.stock).map((s) => (
+                <div key={s} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5">
+                  <span className="text-xs font-bold text-white/50 w-10">{s}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.stock[s]}
+                    onChange={(e) => setStock(s, e.target.value)}
+                    className="w-full bg-transparent text-sm text-white outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-400 bg-red-500/10 rounded px-3 py-2">{error}</p>}
+          <div className="flex gap-3 mt-2">
+            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-white/15 py-3 text-sm text-white/70">Cancel·lar</button>
+            <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-brand py-3 text-sm font-bold text-white disabled:opacity-40 flex items-center justify-center gap-2">
+              {loading ? <><Loader2 size={14} className="animate-spin" />Desant...</> : "Desar Canvis"}
             </button>
           </div>
         </form>
@@ -256,11 +425,14 @@ function CashModal({ events, onClose, onCreated }: {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function AdminDashboard() {
+  const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [events, setEvents] = useState<{ id: string; title: string; spots_remaining: number; total_spots: number; status: string; sheet_id?: string }[]>([]);
+  const [events, setEvents] = useState<AdminEvent[]>([]);
+  const [products, setProducts] = useState<AdminProduct[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [eventModalTarget, setEventModalTarget] = useState<AdminEvent | "new" | null>(null);
+  const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
   const [showCash, setShowCash] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "event" | "merch" | "membership">("all");
   const masterSheetId = process.env.NEXT_PUBLIC_MASTER_SHEET_ID ?? "";
@@ -269,13 +441,15 @@ export default function AdminDashboard() {
     setLoading(true);
     const h = authHeaders();
     try {
-      const [statsRes, eventsRes, purchasesRes] = await Promise.all([
+      const [statsRes, eventsRes, productsRes, purchasesRes] = await Promise.all([
         fetch("/api/admin/stats", { headers: h }),
         fetch("/api/admin/events", { headers: h }),
+        fetch("/api/admin/products", { headers: h }),
         fetch(`/api/admin/purchases${activeTab !== "all" ? `?type=${activeTab}` : ""}`, { headers: h }),
       ]);
       if (statsRes.ok) setStats(await statsRes.json());
       if (eventsRes.ok) setEvents(await eventsRes.json());
+      if (productsRes.ok) setProducts(await productsRes.json());
       if (purchasesRes.ok) setPurchases(await purchasesRes.json());
     } catch (err) {
       console.error("Dashboard fetch error:", err);
@@ -310,7 +484,8 @@ export default function AdminDashboard() {
       <header className="border-b border-white/10 bg-black/30 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-40">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-brand font-display font-extrabold text-lg">⚽ CF Juneda</span>
+            <Crest className="h-7 w-[19px]" />
+            <span className="text-brand font-display font-extrabold text-lg">CF Juneda</span>
             <span className="text-white/30">|</span>
             <span className="text-white/60 text-sm">Panell d&apos;Administració</span>
           </div>
@@ -334,7 +509,7 @@ export default function AdminDashboard() {
           <StatCard icon={Euro} label="Ingressos Totals" value={`${stats?.total_revenue?.toFixed(2) ?? "—"} €`} sub="Pagaments confirmats" color="brand" />
           <StatCard icon={Ticket} label="Tiquets Venuts" value={stats?.tickets_sold ?? "—"} sub="Tots els esdeveniments" color="green" />
           <StatCard icon={ShoppingBag} label="Comandes Botiga" value={stats?.merch_orders ?? "—"} sub="Peces venudes" color="blue" />
-          <StatCard icon={Users} label="Socis Actuals" value={stats?.active_members ?? "—"} sub="Temporada 2025/26" color="gold" />
+          <StatCard icon={Users} label="Socis Actuals" value={stats?.active_members ?? "—"} sub="Temporada 2026/27" color="gold" />
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -342,7 +517,7 @@ export default function AdminDashboard() {
           <div className="lg:col-span-1">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg font-bold text-white">Esdeveniments</h2>
-              <button onClick={() => setShowCreateEvent(true)} className="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-xs font-bold text-white hover:opacity-90 transition-opacity">
+              <button onClick={() => setEventModalTarget("new")} className="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-xs font-bold text-white hover:opacity-90 transition-opacity">
                 <Plus size={13} /> Nou
               </button>
             </div>
@@ -356,12 +531,29 @@ export default function AdminDashboard() {
                 const sheetUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}` : null;
 
                 return (
-                  <div key={ev.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <div
+                    key={ev.id}
+                    onClick={() => router.push(`/admin/events/${ev.id}`)}
+                    role="link"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter") router.push(`/admin/events/${ev.id}`); }}
+                    className="cursor-pointer rounded-xl border border-white/10 bg-white/[0.03] p-4 hover:border-brand/40 hover:bg-white/[0.05] transition-colors"
+                  >
                     <div className="flex items-start justify-between mb-2">
                       <p className="font-semibold text-sm text-white leading-tight">{ev.title}</p>
-                      <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${ev.status === "active" ? "bg-green-500/15 text-green-400" : ev.status === "sold_out" ? "bg-brand/15 text-brand" : "bg-white/10 text-white/40"}`}>
-                        {ev.status}
-                      </span>
+                      <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${ev.status === "active" ? "bg-green-500/15 text-green-400" : ev.status === "sold_out" ? "bg-brand/15 text-brand" : "bg-white/10 text-white/40"}`}>
+                          {ev.status}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEventModalTarget(ev); }}
+                          className="rounded-md p-1 text-white/40 hover:text-white hover:bg-white/10"
+                          aria-label="Editar esdeveniment"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        <ChevronRight size={14} className="text-white/25" />
+                      </div>
                     </div>
                     <div className="mb-2">
                       <div className="flex justify-between text-xs text-white/40 mb-1">
@@ -373,10 +565,59 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     {sheetUrl && (
-                      <a href={sheetUrl} target="_blank" rel="noopener" className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors">
+                      <a
+                        href={sheetUrl}
+                        target="_blank"
+                        rel="noopener"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors"
+                      >
                         <ExternalLink size={11} /> Obrir Full de Calcul {tabName && `(${tabName})`}
                       </a>
                     )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Botiga panel */}
+            <div className="flex items-center justify-between mb-4 mt-8">
+              <h2 className="font-display text-lg font-bold text-white">Botiga</h2>
+            </div>
+            <div className="flex flex-col gap-3">
+              {products.length === 0 && !loading && (
+                <p className="text-sm text-white/30 text-center py-8">Sense productes.</p>
+              )}
+              {products.map((p) => {
+                const totalStock = Object.values(p.stock ?? {}).reduce((a, b) => a + b, 0);
+                return (
+                  <div key={p.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <p className="font-semibold text-sm text-white leading-tight">{p.name}</p>
+                      <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${p.status === "active" ? "bg-green-500/15 text-green-400" : p.status === "out_of_stock" ? "bg-brand/15 text-brand" : "bg-white/10 text-white/40"}`}>
+                          {p.status}
+                        </span>
+                        <button
+                          onClick={() => setEditingProduct(p)}
+                          className="rounded-md p-1 text-white/40 hover:text-white hover:bg-white/10"
+                          aria-label="Editar producte"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-white/40 mb-2">
+                      <span className="font-display text-lg font-bold text-white">{p.price_eur.toFixed(2)} €</span>
+                      <span className="flex items-center gap-1"><PackageCheck size={12} /> {totalStock} unitats</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 text-[10px] text-white/40">
+                      {Object.entries(p.stock ?? {}).map(([size, qty]) => (
+                        <span key={size} className={`rounded-md border px-1.5 py-0.5 ${qty > 0 ? "border-white/10" : "border-red-500/20 text-red-400/70"}`}>
+                          {size}: {qty}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 );
               })}
@@ -453,7 +694,20 @@ export default function AdminDashboard() {
       </main>
 
       {/* Modals */}
-      {showCreateEvent && <CreateEventModal onClose={() => setShowCreateEvent(false)} onCreated={() => { setShowCreateEvent(false); fetchData(); }} />}
+      {eventModalTarget && (
+        <EventModal
+          event={eventModalTarget === "new" ? undefined : eventModalTarget}
+          onClose={() => setEventModalTarget(null)}
+          onSaved={() => { setEventModalTarget(null); fetchData(); }}
+        />
+      )}
+      {editingProduct && (
+        <ProductModal
+          product={editingProduct}
+          onClose={() => setEditingProduct(null)}
+          onSaved={() => { setEditingProduct(null); fetchData(); }}
+        />
+      )}
       {showCash && <CashModal events={events} onClose={() => setShowCash(false)} onCreated={() => { setShowCash(false); fetchData(); }} />}
     </div>
   );

@@ -1,17 +1,37 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SectionHeading } from "./EventsSection";
 import { KitViewer2D } from "./KitViewer2D";
 import { Loader2, ShoppingBag, X } from "lucide-react";
 
 type ViewType = "front" | "back";
-type SizeType = "S" | "M" | "L" | "XL" | "NEN/A";
+
+type Product = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  price_eur: number;
+  sizes: string[];
+  stock: Record<string, number>;
+};
+
+const DEFAULT_SIZES = ["S", "M", "L", "XL", "NEN/A"];
+const FALLBACK_PRODUCT = {
+  slug: "1a-equipacio",
+  name: "Conjunt Oficial Juneda",
+  description:
+    "La pell de l'equip per a la nova temporada a Segona Catalana. Samarreta vermella amb trama diagonal blava de disseny exclusiu, escut brodat del club, i els patrocinis oficials de la comarca. Completa amb pantaló blau marí i mitgetes oficials de joc.",
+  price_eur: 39.9,
+  sizes: DEFAULT_SIZES,
+};
 
 export function ShopSection() {
+  const [product, setProduct] = useState<Product | null>(null);
   const [view, setView] = useState<ViewType>("front");
-  const [size, setSize] = useState<SizeType>("M");
+  const [size, setSize] = useState<string>("M");
   const [customize, setCustomize] = useState(false);
   const [number, setNumber] = useState("");
 
@@ -23,7 +43,35 @@ export function ShopSection() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const price = 39.9;
+  // Price, name, description, sizes and stock come from Supabase so the
+  // Junta can edit them from /admin and the web + Stripe charge stay in
+  // sync — a hardcoded price here previously drifted from what the DB
+  // (and therefore checkout) actually charged.
+  useEffect(() => {
+    fetch("/api/products")
+      .then((r) => r.json())
+      .then((data: Product[]) => {
+        const found = data.find((p) => p.slug === "1a-equipacio") ?? data[0];
+        if (found) {
+          setProduct(found);
+          if ((found.stock?.[size] ?? 1) <= 0) {
+            const firstAvailable = (found.sizes ?? DEFAULT_SIZES).find((s) => (found.stock?.[s] ?? 1) > 0);
+            if (firstAvailable) setSize(firstAvailable);
+          }
+        }
+      })
+      .catch(() => {
+        // Keep the FALLBACK_PRODUCT values already reflected in defaults below.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const name = product?.name ?? FALLBACK_PRODUCT.name;
+  const description = product?.description ?? FALLBACK_PRODUCT.description;
+  const price = product?.price_eur ?? FALLBACK_PRODUCT.price_eur;
+  const sizes = product?.sizes?.length ? product.sizes : FALLBACK_PRODUCT.sizes;
+  const stock = product?.stock ?? {};
+  const selectedSizeOutOfStock = (stock[size] ?? 1) <= 0;
 
   const handleCustomFocus = () => {
     setView("back");
@@ -37,6 +85,7 @@ export function ShopSection() {
   const handleProcessCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!buyerEmail || !buyerName) return;
+    if (customize && !number.trim()) return;
 
     setLoading(true);
     setError(null);
@@ -47,9 +96,9 @@ export function ShopSection() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "merch",
-          productId: "1a-equipacio",
+          productId: product?.slug ?? FALLBACK_PRODUCT.slug,
           size,
-          customNumber: customize ? number.trim() || "10" : undefined,
+          customNumber: customize ? number.trim() : undefined,
           guestName: buyerName.trim(),
           email: buyerEmail.trim(),
           phone: buyerPhone.trim(),
@@ -92,13 +141,10 @@ export function ShopSection() {
                 1a EQUIPACIÓ OFICIAL 2026/2027
               </span>
               <h3 className="font-display mt-2 text-3xl font-extrabold text-white md:text-4xl">
-                Conjunt Oficial Juneda
+                {name}
               </h3>
               <p className="mt-4 text-sm leading-relaxed text-white/60">
-                La pell de l&apos;equip per a la nova temporada a Segona Catalana. Samarreta
-                vermella amb trama diagonal blava de disseny exclusiu, escut brodat del club,
-                i els patrocinis oficials de la comarca. Completa amb pantaló blau marí i
-                mitgetes oficials de joc.
+                {description}
               </p>
             </div>
 
@@ -109,7 +155,7 @@ export function ShopSection() {
               </span>
               <div className="mt-2.5 flex items-center gap-2">
                 <span className="h-6 w-6 rounded-full border border-white/20 bg-[#e10600]" title="Vermell Oficial" />
-                <span className="h-6 w-6 rounded-full border border-white/20 bg-[#0b2e83]" title="Blau Marí" />
+                <span className="h-6 w-6 rounded-full border border-white/20 bg-[#0b2e83]" title="Detalls Blau Marí" />
                 <span className="h-6 w-6 rounded-full border border-white/20 bg-[#ffffff]" title="Detalls en Blanc" />
               </div>
             </div>
@@ -120,19 +166,26 @@ export function ShopSection() {
                 Selecciona Talla
               </span>
               <div className="mt-2.5 flex flex-wrap gap-2">
-                {(["S", "M", "L", "XL", "NEN/A"] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSize(s)}
-                    className={`rounded-xl border px-4 py-2 text-xs font-bold tracking-wider transition-all duration-300 ${
-                      size === s
-                        ? "border-brand bg-brand/15 text-brand-light shadow-[0_0_10px_rgba(225,6,0,0.15)]"
-                        : "border-white/10 bg-black/20 text-white/60 hover:border-white/25 hover:text-white"
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
+                {sizes.map((s) => {
+                  const outOfStock = (stock[s] ?? 1) <= 0;
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => !outOfStock && setSize(s)}
+                      disabled={outOfStock}
+                      title={outOfStock ? "Esgotat" : undefined}
+                      className={`rounded-xl border px-4 py-2 text-xs font-bold tracking-wider transition-all duration-300 ${
+                        outOfStock
+                          ? "cursor-not-allowed border-white/5 bg-black/10 text-white/25 line-through"
+                          : size === s
+                          ? "border-brand bg-brand/15 text-brand-light shadow-[0_0_10px_rgba(225,6,0,0.15)]"
+                          : "border-white/10 bg-black/20 text-white/60 hover:border-white/25 hover:text-white"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -164,6 +217,9 @@ export function ShopSection() {
                     placeholder="10"
                     className="w-full max-w-[120px] rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white text-center placeholder-white/25 outline-none focus:border-brand transition-colors"
                   />
+                  {!number.trim() && (
+                    <p className="mt-1.5 text-[10px] text-white/35">Introdueix un dorsal per continuar</p>
+                  )}
                 </div>
               )}
             </div>
@@ -181,10 +237,11 @@ export function ShopSection() {
             </div>
             <button
               onClick={handleOpenCheckout}
-              className="group relative flex items-center justify-center gap-2 rounded-full bg-brand px-10 py-4 font-display text-sm font-extrabold uppercase tracking-widest text-white transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_24px_rgba(225,6,0,0.6)]"
+              disabled={selectedSizeOutOfStock}
+              className="group relative flex items-center justify-center gap-2 rounded-full bg-brand px-10 py-4 font-display text-sm font-extrabold uppercase tracking-widest text-white transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_24px_rgba(225,6,0,0.6)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:shadow-none"
             >
               <ShoppingBag size={16} />
-              Comprar
+              {selectedSizeOutOfStock ? "Talla esgotada" : "Comprar"}
             </button>
           </div>
         </div>
@@ -203,7 +260,7 @@ export function ShopSection() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <span className="text-xs font-bold uppercase tracking-wider text-brand">Finalitzar comanda</span>
-                  <h4 className="font-display text-xl font-bold text-white">1a Equipació CF Juneda</h4>
+                  <h4 className="font-display text-xl font-bold text-white">{name}</h4>
                 </div>
                 <button
                   onClick={() => setCheckoutModalOpen(false)}
@@ -222,7 +279,7 @@ export function ShopSection() {
                 {customize && (
                   <div className="flex justify-between">
                     <span>Dorsal personalitzat:</span>
-                    <span className="font-bold text-brand">#{number || "10"}</span>
+                    <span className="font-bold text-brand">#{number}</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t border-white/10 pt-1.5 font-semibold text-white">
@@ -290,7 +347,7 @@ export function ShopSection() {
                   </button>
                   <button
                     type="submit"
-                    disabled={loading || !buyerName || !buyerEmail}
+                    disabled={loading || !buyerName || !buyerEmail || (customize && !number.trim()) || selectedSizeOutOfStock}
                     className="flex-1 rounded-xl bg-brand py-3 text-xs font-extrabold uppercase tracking-widest text-white transition-all hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2"
                   >
                     {loading ? (

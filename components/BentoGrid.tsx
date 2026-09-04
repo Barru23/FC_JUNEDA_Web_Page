@@ -1,9 +1,15 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CalendarDays, ShoppingBag, Users, ScrollText, ArrowUpRight } from "lucide-react";
+import { ShoppingBag, CalendarDays, HeartHandshake, Users, ArrowUpRight } from "lucide-react";
 
 const TILES = [
+  {
+    href: "#botiga",
+    icon: ShoppingBag,
+    title: "Botiga Oficial",
+    copy: "Equipació 26/27 amb personalització de dorsal.",
+  },
   {
     href: "#esdeveniments",
     icon: CalendarDays,
@@ -11,22 +17,16 @@ const TILES = [
     copy: "Reserva la teva plaça als sopars i dinars de temporada del club.",
   },
   {
-    href: "#botiga",
-    icon: ShoppingBag,
-    title: "Botiga Oficial",
-    copy: "Equipació 25/26, bufandes i marxandatge amb personalització.",
+    href: "#socis",
+    icon: HeartHandshake,
+    title: "Fes-te Soci",
+    copy: "Suma't als seguidors i socis del club i viu la temporada des de dins.",
   },
   {
     href: "#plantilla",
     icon: Users,
     title: "Plantilla 1r Equip",
     copy: "Coneix la plantilla i el cos tècnic, posició a posició.",
-  },
-  {
-    href: "#historia",
-    icon: ScrollText,
-    title: "Història i Socis",
-    copy: "Dècades de futbol a Juneda. Fes-te soci i forma't-hi part.",
   },
 ];
 

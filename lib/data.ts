@@ -4,10 +4,14 @@
 
 export type ClubEvent = {
   id: string;
+  dbId?: string;
   title: string;
   date: string;
+  time?: string;
   location: string;
   menu: string;
+  description?: string;
+  imageUrl?: string | null;
   price: number;
   spotsLeft: number;
   totalSpots?: number;

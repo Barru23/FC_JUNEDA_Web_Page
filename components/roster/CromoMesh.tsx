@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
+import { Billboard } from "@react-three/drei";
 import * as THREE from "three";
 import { HoloMaterial } from "./HoloMaterial";
-import { buildCrestTexture } from "@/lib/cromo-texture";
+import { buildCrestTexture, loadCromoTexture, CARD_ASPECT } from "@/lib/cromo-texture";
 
 // Shared across every card — loaded once, not once per card.
 let sharedCrestTexture: THREE.CanvasTexture | null = null;
 let sharedCrestPromise: Promise<THREE.CanvasTexture> | null = null;
 
-function useSharedCrestTexture(): THREE.CanvasTexture | null {
+/** Exported so StaffBench's collapsed plaque can show the same crest face
+ *  (and share the same cached texture instance) rather than building its
+ *  own separate copy. */
+export function useSharedCrestTexture(): THREE.CanvasTexture | null {
   const [texture, setTexture] = useState(sharedCrestTexture);
   useEffect(() => {
     if (sharedCrestTexture) {
@@ -31,42 +35,31 @@ function useSharedCrestTexture(): THREE.CanvasTexture | null {
 }
 
 /**
- * Loads a player/staff photo for the card avatar — returns null while
- * loading, on failure, or when `url` is undefined (every current squad
- * record, since SquadPlayer.photo isn't populated yet). PlayerCromo/
- * StaffCromo fall back to the initials draw whenever this is null, so
- * populating `photo` later needs no further code change.
+ * Loads one of the club's own cromo images (public/cromos/*.webp) — returns
+ * null while it's loading or on failure. Textures are cached by URL in
+ * lib/cromo-texture.ts, so re-mounting the same card (a substitute's row
+ * collapsing and re-expanding) doesn't re-decode the image.
  */
-export function usePlayerPhoto(url?: string): HTMLImageElement | null {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
+export function useCromoTexture(url: string): THREE.Texture | null {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
   useEffect(() => {
-    if (!url) {
-      setImage(null);
-      return;
-    }
     let cancelled = false;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      if (!cancelled) setImage(img);
-    };
-    img.onerror = () => {
-      if (!cancelled) setImage(null);
-    };
-    img.src = url;
+    setTexture(null);
+    loadCromoTexture(url).then((t) => {
+      if (!cancelled) setTexture(t);
+    });
     return () => {
       cancelled = true;
     };
   }, [url]);
-  return image;
+  return texture;
 }
 
 /**
  * Disposes a CanvasTexture when it's replaced or the owning component
- * unmounts. Substitute cards genuinely unmount/remount as a formation row
- * collapses and re-expands (only starters stay mounted while collapsed), so
- * without this every re-expand would leak a fresh GPU texture — the same
- * leak Stage 0 fixed for the pitch's own grass texture.
+ * unmounts. Only used for the shared crest texture here — the per-cromo
+ * photo textures are cached by URL (lib/cromo-texture.ts) and reused across
+ * mount/unmount, so disposing them on unmount would break the next reveal.
  */
 export function useDisposableTexture(texture: THREE.Texture) {
   useEffect(() => {
@@ -74,103 +67,138 @@ export function useDisposableTexture(texture: THREE.Texture) {
   }, [texture]);
 }
 
-export const CARD_WIDTH = 1.15;
-export const CARD_HEIGHT = CARD_WIDTH / (496 / 664);
+export const CARD_WIDTH = 1.3;
+export const CARD_HEIGHT = CARD_WIDTH / CARD_ASPECT;
+
+// The enlarged "click to zoom" card is simply the same cromo, bigger — same
+// aspect ratio, its own plane so it isn't a scaled reuse of the small one.
+export const DETAIL_CARD_WIDTH = 1.2;
+export const DETAIL_CARD_HEIGHT = DETAIL_CARD_WIDTH / CARD_ASPECT;
+
+// Fixed "presentation" point in front of the camera a detailed card flies
+// to. The camera sits at [0,11,16] looking at [0,0,0] (PitchScene.tsx) with
+// only a small OrbitControls range, so a constant point along that ray stays
+// well-framed without tracking the camera every frame.
+const DETAIL_POINT = new THREE.Vector3(0, 4.2, 8.5);
+const DETAIL_SCALE = 3.4;
 
 interface CromoMeshProps {
-  frontTexture: THREE.Texture;
-  backTexture: THREE.Texture;
+  /** Field-size cromo (public/cromos/<slug>.webp) — the small, on-pitch face. */
+  photoUrl: string;
+  /** 2x cromo (public/cromos/<slug>@2x.webp) — used only once a card is
+   *  flown toward the camera and enlarged, so it stays crisp up close. */
+  photoUrl2x: string;
   position3D: [number, number, number];
   dimmed: boolean;
+  /** True while this card's row/bench is the active selection — crossfades
+   *  the crest into the player face, matching what used to be hover. */
+  revealed: boolean;
+  isDetailed: boolean;
   rarityColor: string;
-  rotationY?: number;
+  onToggleDetail: () => void;
 }
 
 /**
  * The interactive mesh behind every roster card: club crest at rest,
- * crossfading into the player on hover (or first tap on touch, which has no
- * hover), clicking again once revealed flips to the bio/back face.
+ * crossfading into the real cromo once its row is activated (button-driven —
+ * see `revealed`, owned by TacticalPitchRoster.tsx). Clicking a revealed
+ * card flies it toward the camera and enlarges it — the same cromo, at its
+ * higher-resolution 2x asset — clicking it again, clicking empty space, or
+ * Escape closes it (TacticalPitchRoster.tsx owns which card, if any, is
+ * detailed).
+ *
+ * Cards billboard to the camera (`<Billboard>`) rather than sitting at a
+ * fixed rotation — a fixed angle was tuned for a card near the origin, but
+ * cards fan out across both the pitch's length (x: -7.6 to 3.8, one line per
+ * position) and width (z: up to ±5.75 within a line), and at those offsets a
+ * static rotation increasingly misses square-on with an off-axis camera.
+ *
+ * Billboard's position/scale are driven imperatively (via its forwarded
+ * ref, see node_modules/@react-three/drei/core/Billboard.js) rather than as
+ * static props, since detail mode needs them to interpolate continuously
+ * between the card's formation spot and DETAIL_POINT.
  */
 export function CromoMesh({
-  frontTexture,
-  backTexture,
+  photoUrl,
+  photoUrl2x,
   position3D,
   dimmed,
+  revealed,
+  isDetailed,
   rarityColor,
-  rotationY = Math.PI / 4.4,
+  onToggleDetail,
 }: CromoMeshProps) {
   const crestTexture = useSharedCrestTexture();
-  const [hovered, setHovered] = useState(false);
-  const [flipped, setFlipped] = useState(false);
+  // The 2x asset is only ever needed once a card is actually opened, but
+  // loadCromoTexture's cache means requesting it eagerly here is cheap on
+  // repeat visits — kept simple rather than deferring the fetch to
+  // isDetailed, since every card in a revealed row is a likely click target.
+  const frontTexture = useCromoTexture(photoUrl);
+  const detailTexture = useCromoTexture(photoUrl2x);
 
-  const flipGroup = useRef<THREE.Group>(null);
-  const flipAngle = useRef(0);
-  const hoverProgress = useRef(0);
+  const billboardRef = useRef<THREE.Group>(null);
+  const revealProgress = useRef(0);
+  const detailProgress = useRef(0);
   // Read directly by HoloMaterial's own useFrame — see its opacityRef prop.
   const crestOpacity = useRef(1);
   const frontOpacity = useRef(0);
+  const detailOpacity = useRef(0);
+
+  const restPosition = useMemo(() => new THREE.Vector3(...position3D), [position3D]);
+  const scratchPos = useRef(new THREE.Vector3()).current;
 
   const cardScale = dimmed ? 0.9 : 1;
   const cardOpacity = dimmed ? 0.25 : 1;
 
   useFrame((_, delta) => {
-    const flipTarget = flipped ? Math.PI : 0;
-    flipAngle.current = THREE.MathUtils.damp(flipAngle.current, flipTarget, 6, delta);
-    if (flipGroup.current) flipGroup.current.rotation.y = flipAngle.current;
+    const detailTarget = isDetailed ? 1 : 0;
+    detailProgress.current = THREE.MathUtils.damp(detailProgress.current, detailTarget, 4, delta);
 
-    const hoverTarget = dimmed ? 0 : hovered ? 1 : 0;
-    hoverProgress.current = THREE.MathUtils.damp(hoverProgress.current, hoverTarget, 5, delta);
-    crestOpacity.current = (1 - hoverProgress.current) * cardOpacity;
-    frontOpacity.current = hoverProgress.current * cardOpacity;
+    const revealTarget = dimmed ? 0 : revealed ? 1 : 0;
+    revealProgress.current = THREE.MathUtils.damp(revealProgress.current, revealTarget, 5, delta);
+
+    const notDetailed = 1 - detailProgress.current;
+    crestOpacity.current = (1 - revealProgress.current) * cardOpacity * notDetailed;
+    frontOpacity.current = revealProgress.current * cardOpacity * notDetailed;
+    detailOpacity.current = detailProgress.current;
+
+    if (billboardRef.current) {
+      scratchPos.copy(restPosition).lerp(DETAIL_POINT, detailProgress.current);
+      billboardRef.current.position.copy(scratchPos);
+      const scale = THREE.MathUtils.lerp(cardScale, DETAIL_SCALE, detailProgress.current);
+      billboardRef.current.scale.setScalar(scale);
+    }
   });
 
-  // Dimmed cards behave like the old pointer-events:none — inert, and the
-  // event stops here rather than bubbling on to some other row's handlers.
-  const handlePointerOver = (e: { stopPropagation: () => void }) => {
-    e.stopPropagation();
-    if (dimmed) return;
-    setHovered(true);
-  };
-  const handlePointerOut = (e: { stopPropagation: () => void }) => {
-    e.stopPropagation();
-    if (dimmed) return;
-    setHovered(false);
-    setFlipped(false);
-  };
   const handleClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
     if (dimmed) return;
-    // Touch has no hover: the first tap reveals the player, matching desktop
-    // hover; a second tap (already revealed) flips to the bio side.
-    if (!hovered) setHovered(true);
-    else setFlipped((f) => !f);
+    onToggleDetail();
   };
 
   return (
-    <group
-      position={position3D}
-      rotation={[0, rotationY, 0]}
-      scale={cardScale}
-      onPointerOver={handlePointerOver}
-      onPointerOut={handlePointerOut}
+    <Billboard
+      ref={billboardRef}
       onClick={handleClick}
     >
-      <group ref={flipGroup}>
-        {crestTexture && (
-          <mesh position={[0, 0, 0.002]}>
-            <planeGeometry args={[CARD_WIDTH, CARD_HEIGHT]} />
-            <HoloMaterial map={crestTexture} opacityRef={crestOpacity} rarityColor={rarityColor} maskStrength={0.9} />
-          </mesh>
-        )}
+      {crestTexture && (
+        <mesh position={[0, 0, 0.002]}>
+          <planeGeometry args={[CARD_WIDTH, CARD_HEIGHT]} />
+          <HoloMaterial map={crestTexture} opacityRef={crestOpacity} rarityColor={rarityColor} maskStrength={0.9} />
+        </mesh>
+      )}
+      {frontTexture && (
         <mesh position={[0, 0, 0.003]}>
           <planeGeometry args={[CARD_WIDTH, CARD_HEIGHT]} />
           <HoloMaterial map={frontTexture} opacityRef={frontOpacity} rarityColor={rarityColor} maskStrength={0.55} />
         </mesh>
-        <mesh position={[0, 0, -0.002]} rotation={[0, Math.PI, 0]}>
-          <planeGeometry args={[CARD_WIDTH, CARD_HEIGHT]} />
-          <meshBasicMaterial map={backTexture} transparent opacity={cardOpacity} />
+      )}
+      {detailTexture && (
+        <mesh position={[0, 0, 0.004]}>
+          <planeGeometry args={[DETAIL_CARD_WIDTH, DETAIL_CARD_HEIGHT]} />
+          <HoloMaterial map={detailTexture} opacityRef={detailOpacity} rarityColor={rarityColor} maskStrength={0.4} />
         </mesh>
-      </group>
-    </group>
+      )}
+    </Billboard>
   );
 }

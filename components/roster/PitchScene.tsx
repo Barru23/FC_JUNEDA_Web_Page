@@ -7,20 +7,24 @@ import { EffectComposer, Bloom } from "@react-three/postprocessing";
 
 interface PitchSceneProps {
   children: React.ReactNode;
+  /** Fires when a click hits nothing interactive — used to close a detailed
+   *  cromo by clicking empty pitch/background. */
+  onBackgroundClick?: () => void;
 }
 
-export function PitchScene({ children }: PitchSceneProps) {
+export function PitchScene({ children, onBackgroundClick }: PitchSceneProps) {
   // Clamp device pixel ratio so a 3x-retina phone doesn't force full-resolution
   // MSAA; PerformanceMonitor steps it down further if frame times sag.
   const [dpr, setDpr] = useState<[number, number]>([1, 1.75]);
 
   return (
     <Canvas
-      camera={{ position: [12, 10, 14], fov: 45 }}
+      camera={{ position: [0, 11, 16], fov: 45 }}
       shadows
       dpr={dpr}
       style={{ background: "transparent" }}
       gl={{ antialias: true, alpha: true }}
+      onPointerMissed={onBackgroundClick}
     >
       <PerformanceMonitor
         onIncline={() => setDpr([1, 1.75])}
@@ -60,9 +64,13 @@ export function PitchScene({ children }: PitchSceneProps) {
           under-glow, the holo cromos' iridescent peaks) rather than washing
           the whole scene — those are the only things drawn with
           toneMapped=false / boosted brightness, everything else stays under
-          the threshold. */}
+          the threshold. Raised from 0.65: the real cromos print a near-white
+          photo backdrop and stat panels (~0.95+ luma) that the old
+          procedurally-drawn cards (dark all over) never had, and
+          HoloMaterial writes color untonemapped — at 0.65 that backdrop
+          alone would bloom into a veil over every revealed card. */}
       <EffectComposer>
-        <Bloom luminanceThreshold={0.65} luminanceSmoothing={0.3} intensity={0.9} mipmapBlur />
+        <Bloom luminanceThreshold={0.92} luminanceSmoothing={0.25} intensity={0.9} mipmapBlur />
       </EffectComposer>
     </Canvas>
   );

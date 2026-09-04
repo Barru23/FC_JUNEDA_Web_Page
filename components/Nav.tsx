@@ -6,11 +6,10 @@ import { useState } from "react";
 import { Crest } from "./Crest";
 
 const LINKS = [
-  { href: "#esdeveniments", label: "Esdeveniments" },
   { href: "#botiga", label: "Botiga" },
+  { href: "#esdeveniments", label: "Esdeveniments" },
   { href: "#socis", label: "Fes-te Soci" },
   { href: "#plantilla", label: "Plantilla" },
-  { href: "#historia", label: "Història" },
 ];
 
 export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
@@ -25,13 +24,13 @@ export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
       >
         <Menu size={16} className="text-white/80" />
         <span className="hidden text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60 sm:inline">
-          Temporada 25/26 — Segona Catalana G5
+          Temporada 26/27 — Segona Catalana G5
         </span>
       </button>
 
       <motion.div
         layoutId="crest"
-        className="absolute left-1/2 top-1/2 h-[46px] w-[40px] -translate-x-1/2 -translate-y-1/2"
+        className="absolute left-1/2 top-1/2 h-[48px] w-[33px] -translate-x-1/2 -translate-y-1/2"
         animate={{ opacity: crestRevealed ? 1 : 0 }}
         transition={{ duration: 0.3 }}
       >

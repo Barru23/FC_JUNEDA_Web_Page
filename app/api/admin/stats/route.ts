@@ -10,13 +10,19 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    // Revenue totals
-    const { data: revData } = await supabase
-      .from("purchases")
-      .select("purchase_type, amount_eur")
-      .eq("payment_status", "completed");
+    // None of these five queries depend on each other — running them with
+    // Promise.all bounds the total wait to the slowest single call instead
+    // of their sum (matters most when Supabase is slow/unreachable, since
+    // every call shares the same fetch timeout — see lib/supabase.ts).
+    const [revRes, ticketRes, merchRes, memberRes, recentRes] = await Promise.all([
+      supabase.from("purchases").select("purchase_type, amount_eur").eq("payment_status", "completed"),
+      supabase.from("purchases").select("*", { count: "exact", head: true }).eq("purchase_type", "event").eq("payment_status", "completed"),
+      supabase.from("purchases").select("*", { count: "exact", head: true }).eq("purchase_type", "merch").eq("payment_status", "completed"),
+      supabase.from("purchases").select("*", { count: "exact", head: true }).eq("purchase_type", "membership").eq("payment_status", "completed"),
+      supabase.from("purchases").select("*, event:events(title,date), product:products(name), tier:membership_tiers(name)").order("created_at", { ascending: false }).limit(10),
+    ]);
 
-    const totals = (revData ?? []).reduce(
+    const totals = (revRes.data ?? []).reduce(
       (acc, p) => {
         acc.total += p.amount_eur;
         if (p.purchase_type === "event") acc.event += p.amount_eur;
@@ -27,31 +33,10 @@ export async function GET(req: NextRequest) {
       { total: 0, event: 0, merch: 0, membership: 0 }
     );
 
-    // Counts
-    const { count: ticketCount } = await supabase
-      .from("purchases")
-      .select("*", { count: "exact", head: true })
-      .eq("purchase_type", "event")
-      .eq("payment_status", "completed");
-
-    const { count: merchCount } = await supabase
-      .from("purchases")
-      .select("*", { count: "exact", head: true })
-      .eq("purchase_type", "merch")
-      .eq("payment_status", "completed");
-
-    const { count: memberCount } = await supabase
-      .from("purchases")
-      .select("*", { count: "exact", head: true })
-      .eq("purchase_type", "membership")
-      .eq("payment_status", "completed");
-
-    // Recent purchases (last 10)
-    const { data: recent } = await supabase
-      .from("purchases")
-      .select("*, event:events(title,date), product:products(name), tier:membership_tiers(name)")
-      .order("created_at", { ascending: false })
-      .limit(10);
+    const ticketCount = ticketRes.count;
+    const merchCount = merchRes.count;
+    const memberCount = memberRes.count;
+    const recent = recentRes.data;
 
     return NextResponse.json({
       total_revenue: totals.total,

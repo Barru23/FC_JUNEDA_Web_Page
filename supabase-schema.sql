@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- CF Juneda - Supabase Database Schema
 -- Run this in: Supabase Dashboard -> SQL Editor -> New Query
 -- ============================================================
@@ -107,24 +107,38 @@ CREATE INDEX IF NOT EXISTS idx_purchases_type    ON purchases(purchase_type);
 CREATE INDEX IF NOT EXISTS idx_purchases_status  ON purchases(payment_status);
 CREATE INDEX IF NOT EXISTS idx_purchases_created ON purchases(created_at DESC);
 
--- Seed: Default membership tier
+-- Seed: Membership tiers (Campanya 2026/27 - Oficial image.png)
 INSERT INTO membership_tiers (slug, name, price_eur, season, benefits, status)
-VALUES ('soci-general', 'Soci/Sòcia CF Juneda', 25.00, '2025/26', 'Accés a tots els partits, descomptes a la botiga, newsletter del club', 'active')
+VALUES
+  ('soci-general', 'Soci General', 110.00, '2026/27', 'Accés lliure a tots els partits de lliga a casa de la temporada 2026/27, carnet físic i digital oficial, dret a vot a l''Assemblea', 'active'),
+  ('soci-infantil', 'Soci Infantil', 30.00, '2026/27', 'Fins a 12 anys. Entrada lliure a tots els partits a casa, carnet infantil personalitzat, sortejos i activitats infantils', 'active'),
+  ('soci-jove', 'Soci Jove', 60.00, '2026/27', '13 a 25 anys / estudiants. Accés a tots els partits a casa, carnet jove oficial, animació amb la Grada Jove', 'active'),
+  ('soci-protector', 'Soci Protector', 140.00, '2026/27', 'Màxim suport al projecte esportiu. Accés preferent a tots els partits, carnet commemoratiu daurat, menció al club', 'active'),
+  ('soci-afiliats-efi', 'Soci Afiliats EFI', 80.00, '2026/27', 'Quota especial per a familiars de jugadors/es de l''Escola de Futbol Intercomarcal (EFI), accés a partits del 1r equip', 'active')
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  price_eur = EXCLUDED.price_eur,
+  season = EXCLUDED.season,
+  benefits = EXCLUDED.benefits;
+
+-- Events catalogue (title, date, price, description, ...) now lives in
+-- content/events.json; lib/events.ts syncs it into this table by slug at
+-- request time and this table only tracks live spots_remaining/status.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS slug TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS image_url TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_slug ON events(slug) WHERE slug IS NOT NULL;
+
+-- Seed: Sample events (replace with real data) — kept in sync with the ids
+-- in content/events.json so existing rows don't get duplicated on sync.
+INSERT INTO events (slug, title, description, event_type, date, location, menu, price_eur, total_spots, spots_remaining, booking_fee_eur, status)
+VALUES
+  ('dinar-derbi-2026', 'Dinar Derbi', 'Dinar de club per celebrar el derbi de la temporada. Detalls de menú i preu pendents de confirmació.', 'lunch', 'Diumenge, 27 de setembre de 2026', 'Pendent de confirmar — Pavelló Municipal de Juneda', 'Pendent de confirmar', 20.00, 120, 120, 0.75, 'active')
 ON CONFLICT (slug) DO NOTHING;
 
--- Seed: Sample events (replace with real data)
-INSERT INTO events (title, description, event_type, date, location, menu, price_eur, total_spots, spots_remaining, booking_fee_eur, status)
-VALUES
-  ('Sopar de Temporada 2025/26', 'El sopar anual del club per celebrar la temporada', 'dinner', '28 de setembre de 2025', 'Pavelló Municipal de Juneda', 'Menú 3 plats + postres + vi', 18.00, 150, 150, 0.75, 'active'),
-  ('Dinar de Final de Lliga', 'Celebra la final de la lliga amb tot el club', 'lunch', '14 de juny de 2026', 'Casal del Club', 'Menú tradicional català', 22.00, 100, 100, 0.75, 'active')
-ON CONFLICT DO NOTHING;
-
--- Seed: Default products
+-- Seed: Default products — catàleg simplificat a la 1a equipació únicament
 INSERT INTO products (slug, name, description, price_eur, sizes, swatches, customizable, status, stock)
 VALUES
-  ('1a-equipacio', '1a Equipació Vermella 2025/26', 'La samarreta oficial del primer equip per a la temporada 2025/26. Vermell amb detalls blaus i grocs.', 39.90, ARRAY['S','M','L','XL','NEN/A'], ARRAY['#E10600','#0A0A0B','#FBBF24'], true, 'active', '{"S": 10, "M": 15, "L": 12, "XL": 8, "NEN/A": 10}'::JSONB),
-  ('2a-equipacio', '2a Equipació Blava 2025/26', 'Equipació alternativa del club, fons blau marí amb detalls grocs.', 39.90, ARRAY['S','M','L','XL','NEN/A'], ARRAY['#0F172A','#FBBF24'], true, 'active', '{"S": 8, "M": 12, "L": 10, "XL": 6, "NEN/A": 8}'::JSONB),
-  ('bufanda', 'Bufanda Oficial CF Juneda', 'Bufanda oficial del club, vermella i negra.', 14.90, ARRAY['Única'], ARRAY['#E10600','#0A0A0B'], false, 'active', '{"Única": 50}'::JSONB)
+  ('1a-equipacio', '1a Equipació Vermella 2026/27', 'La samarreta oficial del primer equip per a la temporada 2026/27. Vermell amb detalls blaus i grocs.', 39.90, ARRAY['S','M','L','XL','NEN/A'], ARRAY['#E10600','#0A0A0B','#FBBF24'], true, 'active', '{"S": 10, "M": 15, "L": 12, "XL": 8, "NEN/A": 10}'::JSONB)
 ON CONFLICT (slug) DO NOTHING;
 
 -- Row Level Security: public can read active events and products

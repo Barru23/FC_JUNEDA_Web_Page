@@ -15,7 +15,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "CF Juneda — Temporada 25/26",
+  title: "CF Juneda — Temporada 26/27",
   description:
     "Club Futbol Juneda — Esdeveniments, botiga oficial i plantilla. Som-hi Rojos!",
 };
