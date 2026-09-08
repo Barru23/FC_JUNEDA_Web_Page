@@ -1,12 +1,12 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { appendPurchaseRow } from "@/lib/sheets";
 import { sendEventConfirmation, sendMerchConfirmation, sendMembershipWelcome } from "@/lib/email";
 import Stripe from "stripe";
 
-// Required: tell Next.js not to parse the body (Stripe needs raw bytes to verify signature)
-export const config = { api: { bodyParser: false } };
+// A l'App Router no cal desactivar cap body parser: `req.text()` ja retorna
+// els bytes crus que Stripe necessita per verificar la signatura.
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();

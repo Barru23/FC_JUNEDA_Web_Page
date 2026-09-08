@@ -3,6 +3,19 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { createEventSheetTab } from "@/lib/sheets";
 
+const EVENT_TYPES = new Set(["dinner", "lunch", "party", "other"]);
+const EVENT_STATUSES = new Set(["active", "sold_out", "cancelled", "past"]);
+
+function positiveMoney(value: unknown): number | null {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : null;
+}
+
+function nonNegativeMoney(value: unknown): number | null {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) / 100 : null;
+}
+
 // GET /api/admin/events — list all events with purchase counts
 export async function GET(req: NextRequest) {
   if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
@@ -30,10 +43,20 @@ export async function POST(req: NextRequest) {
   if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   const body = await req.json();
-  const { title, description, event_type, date, location, menu, image_url, price_eur, total_spots, booking_fee_eur } = body;
+  const { title, description, event_type, date, location, menu, image_url } = body;
+  const priceEur = positiveMoney(body.price_eur);
+  const bookingFeeEur = nonNegativeMoney(body.booking_fee_eur ?? 0.75);
+  const totalSpots = Number(body.total_spots);
 
-  if (!title || !date || !location || !price_eur || !total_spots) {
+  if (
+    typeof title !== "string" || !title.trim() ||
+    typeof date !== "string" || !date.trim() ||
+    typeof location !== "string" || !location.trim()
+  ) {
     return NextResponse.json({ error: "Falten camps obligatoris" }, { status: 400 });
+  }
+  if (priceEur === null || bookingFeeEur === null || !Number.isInteger(totalSpots) || totalSpots < 1) {
+    return NextResponse.json({ error: "Preu, taxa o places no vàlids" }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
@@ -49,10 +72,17 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase
     .from("events")
     .insert({
-      title, description, event_type: event_type ?? "dinner",
-      date, location, menu, image_url: image_url || null, price_eur, total_spots,
-      spots_remaining: total_spots,
-      booking_fee_eur: booking_fee_eur ?? 0.75,
+      title: title.trim(),
+      description: typeof description === "string" ? description.trim() || null : null,
+      event_type: EVENT_TYPES.has(event_type) ? event_type : "dinner",
+      date: date.trim(),
+      location: location.trim(),
+      menu: typeof menu === "string" ? menu.trim() || null : null,
+      image_url: typeof image_url === "string" ? image_url.trim() || null : null,
+      price_eur: priceEur,
+      total_spots: totalSpots,
+      spots_remaining: totalSpots,
+      booking_fee_eur: bookingFeeEur,
       sheet_id: sheetId,
       status: "active",
     })
@@ -68,8 +98,42 @@ export async function PATCH(req: NextRequest) {
   if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   const body = await req.json();
-  const { id, ...updates } = body;
+  const { id } = body;
   if (!id) return NextResponse.json({ error: "ID requerit" }, { status: 400 });
+
+  const priceEur = positiveMoney(body.price_eur);
+  const bookingFeeEur = nonNegativeMoney(body.booking_fee_eur);
+  const totalSpots = Number(body.total_spots);
+  const spotsRemaining = Number(body.spots_remaining);
+  if (
+    priceEur === null ||
+    bookingFeeEur === null ||
+    !Number.isInteger(totalSpots) ||
+    totalSpots < 1 ||
+    !Number.isInteger(spotsRemaining) ||
+    spotsRemaining < 0 ||
+    spotsRemaining > totalSpots
+  ) {
+    return NextResponse.json({ error: "Preu, taxa o places no vàlids" }, { status: 400 });
+  }
+
+  const updates = {
+    title: typeof body.title === "string" ? body.title.trim() : "",
+    description: typeof body.description === "string" ? body.description.trim() || null : null,
+    event_type: EVENT_TYPES.has(body.event_type) ? body.event_type : "other",
+    date: typeof body.date === "string" ? body.date.trim() : "",
+    location: typeof body.location === "string" ? body.location.trim() : "",
+    menu: typeof body.menu === "string" ? body.menu.trim() || null : null,
+    image_url: typeof body.image_url === "string" ? body.image_url.trim() || null : null,
+    price_eur: priceEur,
+    total_spots: totalSpots,
+    spots_remaining: spotsRemaining,
+    booking_fee_eur: bookingFeeEur,
+    status: EVENT_STATUSES.has(body.status) ? body.status : "active",
+  };
+  if (!updates.title || !updates.date || !updates.location) {
+    return NextResponse.json({ error: "Falten camps obligatoris" }, { status: 400 });
+  }
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase.from("events").update(updates).eq("id", id).select().single();

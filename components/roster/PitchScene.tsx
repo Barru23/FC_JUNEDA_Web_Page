@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import React, { useEffect, useState } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, PerformanceMonitor } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 
@@ -10,6 +10,19 @@ interface PitchSceneProps {
   /** Fires when a click hits nothing interactive — used to close a detailed
    *  cromo by clicking empty pitch/background. */
   onBackgroundClick?: () => void;
+}
+
+// OrbitControls sets the canvas's touch-action to "none" on connect (needed
+// so its own touch handling isn't fought by the browser), which as a side
+// effect blocks the page's vertical scroll over the whole canvas. The
+// rotate range here is tiny (±0.18 rad) so re-allowing vertical panning
+// costs almost nothing — a mostly-vertical drag still scrolls the page.
+function AllowVerticalScroll() {
+  const gl = useThree((state) => state.gl);
+  useEffect(() => {
+    gl.domElement.style.touchAction = "pan-y";
+  }, [gl]);
+  return null;
 }
 
 export function PitchScene({ children, onBackgroundClick }: PitchSceneProps) {
@@ -59,6 +72,7 @@ export function PitchScene({ children, onBackgroundClick }: PitchSceneProps) {
         minPolarAngle={0.7}
         maxPolarAngle={1.15}
       />
+      <AllowVerticalScroll />
 
       {/* Confines the glow to genuinely bright elements (the pitch's red
           under-glow, the holo cromos' iridescent peaks) rather than washing

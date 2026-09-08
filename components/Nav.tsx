@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { Crest } from "./Crest";
+import { Modal } from "@/components/ui/Modal";
 
 const LINKS = [
   { href: "#botiga", label: "Botiga" },
@@ -48,11 +49,13 @@ export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
 
       <AnimatePresence>
         {menuOpen && (
+          <Modal onClose={() => setMenuOpen(false)} ariaLabel="Menú de navegació">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-xl"
+            onClick={() => setMenuOpen(false)}
+            className="fixed inset-0 z-50 flex flex-col overflow-y-auto overscroll-contain bg-black/95 backdrop-blur-xl"
           >
             <div className="flex items-center justify-between px-6 py-5 md:px-10">
               <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
@@ -66,7 +69,7 @@ export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
                 <X size={18} />
               </button>
             </div>
-            <nav className="flex flex-1 flex-col items-start justify-center gap-2 px-8 md:px-16">
+            <nav className="flex flex-1 flex-col items-start justify-center gap-2 px-8 py-8 md:px-16">
               {LINKS.map((link, i) => (
                 <motion.a
                   key={link.href}
@@ -75,7 +78,7 @@ export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05 * i, duration: 0.4 }}
-                  className="font-display text-5xl font-extrabold uppercase tracking-tight text-white/85 transition-colors hover:text-brand md:text-7xl"
+                  className="font-display text-4xl font-extrabold uppercase tracking-tight text-white/85 transition-colors hover:text-brand sm:text-5xl md:text-7xl"
                 >
                   {link.label}
                 </motion.a>
@@ -90,6 +93,7 @@ export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
               </div>
             </nav>
           </motion.div>
+          </Modal>
         )}
       </AnimatePresence>
     </header>

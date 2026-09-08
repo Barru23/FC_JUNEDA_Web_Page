@@ -1,6 +1,7 @@
 ﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { AnimatePresence } from "framer-motion";
 import { BookingDrawer } from "./BookingDrawer";
 import type { ClubEvent } from "@/lib/data";
 import { CalendarDays, MapPin, UtensilsCrossed } from "lucide-react";
@@ -9,16 +10,33 @@ export function EventsSection() {
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [active, setActive] = useState<ClubEvent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadEvents = useCallback(async () => {
+    try {
+      const response = await fetch("/api/events", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) throw new Error(data.error ?? "No s'han pogut carregar els esdeveniments");
+      const nextEvents = data as ClubEvent[];
+      setEvents(nextEvents);
+      setLoadError(null);
+      setActive((current) => current
+        ? nextEvents.find((item) => item.dbId === current.dbId || item.id === current.id) ?? null
+        : null
+      );
+    } catch (err) {
+      console.error(err);
+      setLoadError(err instanceof Error ? err.message : "No s'han pogut carregar els esdeveniments");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    // /api/events already returns ClubEvent-shaped objects (merged from the
-    // content/events.json catalogue + live Supabase spots) — see lib/events.ts.
-    fetch("/api/events")
-      .then((r) => r.json())
-      .then((data: ClubEvent[]) => setEvents(data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    loadEvents();
+    window.addEventListener("focus", loadEvents);
+    return () => window.removeEventListener("focus", loadEvents);
+  }, [loadEvents]);
 
   return (
     <section id="esdeveniments" className="relative z-10 px-6 py-20 md:px-10">
@@ -31,7 +49,7 @@ export function EventsSection() {
           ))}
         </div>
       ) : events.length === 0 ? (
-        <p className="text-white/40 text-sm">No hi ha esdeveniments disponibles actualment.</p>
+        <p className="text-white/40 text-sm">{loadError ?? "No hi ha esdeveniments disponibles actualment."}</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {events.map((event) => {
@@ -87,9 +105,9 @@ export function EventsSection() {
 
                 <div className="mt-auto flex items-center justify-between border-t border-white/10 pt-4">
                   <div className="flex flex-col">
-                    <span className="font-display text-xl font-bold text-white">{event.price} €</span>
+                    <span className="font-display text-xl font-bold text-white">{Number(event.price).toFixed(2)} €</span>
                     {(event.bookingFee ?? 0) > 0 && (
-                      <span className="text-xs text-white/35">+ {event.bookingFee} € gestió</span>
+                      <span className="text-xs text-white/35">+ {Number(event.bookingFee).toFixed(2)} € gestió</span>
                     )}
                   </div>
                   <span className={`rounded-full border px-3 py-1 text-xs ${soldOut ? "border-white/10 text-white/30" : "border-brand/30 bg-brand/10 text-brand-light"}`}>
@@ -110,7 +128,9 @@ export function EventsSection() {
         </div>
       )}
 
-      {active && <BookingDrawer event={active} onClose={() => setActive(null)} />}
+      <AnimatePresence>
+        {active && <BookingDrawer event={active} onClose={() => setActive(null)} />}
+      </AnimatePresence>
     </section>
   );
 }

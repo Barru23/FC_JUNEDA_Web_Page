@@ -1,70 +1,103 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getCatalogueEntry, syncEventCatalogue } from "@/lib/events";
 import { getMembershipTier } from "@/lib/memberships";
-import type { DbEvent } from "@/lib/supabase";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function validPrice(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function metadataValue(value: unknown): string {
+  return typeof value === "string" ? value.trim().slice(0, 500) : "";
+}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { type, eventId, productId, tierId, quantity, guestName, dietary, size, customNumber, email, phone } = body;
+    const {
+      type,
+      eventId,
+      productId,
+      tierId,
+      quantity,
+      guestName,
+      dietary,
+      size,
+      customNumber,
+      email,
+      phone,
+    } = body;
 
-    if (!type || !email) {
+    if (
+      !["event", "merch", "membership"].includes(type) ||
+      typeof email !== "string" ||
+      !email.trim() ||
+      typeof guestName !== "string" ||
+      !guestName.trim()
+    ) {
       return NextResponse.json({ error: "Falten camps obligatoris" }, { status: 400 });
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    let lineItems: {
+      price_data: {
+        currency: string;
+        product_data: { name: string; description?: string };
+        unit_amount: number;
+      };
+      quantity: number;
+    }[] = [];
+    let metadata: Record<string, string> = {
+      type,
+      buyer_email: metadataValue(email),
+      buyer_name: metadataValue(guestName),
+      buyer_phone: metadataValue(phone),
+    };
 
-    let lineItems: { price_data: { currency: string; product_data: { name: string; description?: string }; unit_amount: number }; quantity: number }[] = [];
-    let metadata: Record<string, string> = { type, buyer_email: email, buyer_name: guestName ?? "", buyer_phone: phone ?? "" };
-
-    // ─── Event Ticket ─────────────────────────────────────────────────────────
-    // eventId is the catalogue slug (see lib/events.ts / content/events.json)
-    // — the Supabase row's real UUID (needed for metadata.event_id, which the
-    // webhook uses for decrement_spots + the purchases FK) is looked up here.
+    // Event ticket. Supabase is the price and availability source of truth.
     if (type === "event") {
-      if (!eventId || !quantity) return NextResponse.json({ error: "Falten dades de l'esdeveniment" }, { status: 400 });
-
-      const catalogueEntry = getCatalogueEntry(eventId);
-      if (!catalogueEntry) return NextResponse.json({ error: "Esdeveniment no trobat" }, { status: 404 });
-
-      let eventRow: DbEvent | undefined;
-
-      try {
-        const supabase = getSupabaseAdmin();
-        await syncEventCatalogue(supabase);
-        const { data: event } = await supabase.from("events").select("*").eq("slug", eventId).single();
-        if (event) eventRow = event as DbEvent;
-      } catch (err) {
-        console.warn("[Checkout] Supabase query failed for event:", err);
+      const ticketQuantity = Number(quantity);
+      if (!eventId || !Number.isInteger(ticketQuantity) || ticketQuantity < 1 || ticketQuantity > 20) {
+        return NextResponse.json({ error: "Dades de l'esdeveniment no vàlides" }, { status: 400 });
       }
 
-      if (!eventRow) {
-        return NextResponse.json({ error: "Esdeveniment no disponible per a la venda en aquest moment" }, { status: 503 });
+      const supabase = getSupabaseAdmin();
+      const eventIdentifier = String(eventId);
+      const eventColumn = UUID_PATTERN.test(eventIdentifier) ? "id" : "slug";
+      const { data: eventRow, error: eventError } = await supabase
+        .from("events")
+        .select("*")
+        .eq(eventColumn, eventIdentifier)
+        .maybeSingle();
+
+      if (eventError) throw eventError;
+      if (!eventRow) return NextResponse.json({ error: "Esdeveniment no trobat" }, { status: 404 });
+      if (eventRow.status !== "active") {
+        return NextResponse.json({ error: "Aquest esdeveniment ja no està disponible" }, { status: 409 });
       }
-      if (eventRow.spots_remaining < quantity) {
+      if (eventRow.spots_remaining < ticketQuantity) {
         return NextResponse.json({ error: "No hi ha prou places disponibles" }, { status: 409 });
       }
 
-      // The DB row wins whenever it has a value — it's what the admin panel
-      // edits and what the public site now displays (lib/events.ts's
-      // mergeEvent); the catalogue only fills in what a bare row lacks.
-      const eventDbId = eventRow.id;
-      const eventTitle = eventRow.title ?? catalogueEntry.title;
-      const eventDate = eventRow.date ?? catalogueEntry.date;
-      const eventLocation = eventRow.location ?? catalogueEntry.location;
-      const priceEur = eventRow.price_eur ?? catalogueEntry.priceEur;
-      const bookingFeeEur = eventRow.booking_fee_eur ?? catalogueEntry.bookingFeeEur;
+      const priceEur = Number(eventRow.price_eur);
+      const bookingFeeEur = Number(eventRow.booking_fee_eur ?? 0);
+      if (!validPrice(priceEur) || !Number.isFinite(bookingFeeEur) || bookingFeeEur < 0) {
+        return NextResponse.json({ error: "El preu de l'esdeveniment no és vàlid" }, { status: 409 });
+      }
 
       lineItems = [
         {
           price_data: {
             currency: "eur",
-            product_data: { name: eventTitle, description: `${quantity} tiquet(s) · ${eventDate} · ${eventLocation}` },
+            product_data: {
+              name: eventRow.title,
+              description: `${ticketQuantity} tiquet(s) · ${eventRow.date} · ${eventRow.location}`,
+            },
             unit_amount: Math.round(priceEur * 100),
           },
-          quantity,
+          quantity: ticketQuantity,
         },
       ];
 
@@ -72,66 +105,112 @@ export async function POST(req: NextRequest) {
         lineItems.push({
           price_data: {
             currency: "eur",
-            product_data: { name: "Despeses de gestió online", description: "Taxa de gestió per compra en línia" },
+            product_data: {
+              name: "Despeses de gestió online",
+              description: "Taxa de gestió per compra en línia",
+            },
             unit_amount: Math.round(bookingFeeEur * 100),
           },
           quantity: 1,
         });
       }
 
-      metadata = { ...metadata, event_id: eventDbId, quantity: String(quantity), dietary: dietary ?? "", purchase_type: "event" };
+      metadata = {
+        ...metadata,
+        event_id: eventRow.id,
+        quantity: String(ticketQuantity),
+        dietary: metadataValue(dietary),
+        purchase_type: "event",
+      };
     }
 
-    // ─── Merchandise ──────────────────────────────────────────────────────────
+    // Merchandise. No client-provided or hardcoded fallback price is accepted.
     else if (type === "merch") {
-      if (!size) return NextResponse.json({ error: "Falten dades del producte" }, { status: 400 });
-
-      let productName = "1a Equipació Oficial CF Juneda";
-      let productPrice = 39.90;
-      let productDbId: string | undefined;
-      const productSlug = productId ?? "1a-equipacio";
-
-      try {
-        const supabase = getSupabaseAdmin();
-        const { data: product } = await supabase.from("products").select("*").eq("slug", productSlug).single();
-        if (product) {
-          productName = product.name;
-          productPrice = product.price_eur;
-          productDbId = product.id;
-        }
-      } catch (err) {
-        console.warn("[Checkout] Supabase query fallback for product:", err);
+      if (!productId || typeof size !== "string" || !size) {
+        return NextResponse.json({ error: "Falten dades del producte" }, { status: 400 });
       }
 
-      const customization = customNumber ? `#${customNumber}` : undefined;
-      lineItems = [{
-        price_data: {
-          currency: "eur",
-          product_data: { name: productName, description: [size, customization].filter(Boolean).join(" · ") || undefined },
-          unit_amount: Math.round(productPrice * 100),
-        },
-        quantity: 1,
-      }];
+      const supabase = getSupabaseAdmin();
+      const productIdentifier = String(productId);
+      const productColumn = UUID_PATTERN.test(productIdentifier) ? "id" : "slug";
+      const { data: product, error: productError } = await supabase
+        .from("products")
+        .select("*")
+        .eq(productColumn, productIdentifier)
+        .maybeSingle();
 
-      metadata = { ...metadata, product_id: productDbId ?? "", product_slug: productSlug, size, custom_number: customNumber ?? "", purchase_type: "merch" };
+      if (productError) throw productError;
+      if (!product) return NextResponse.json({ error: "Producte no trobat" }, { status: 404 });
+      if (product.status !== "active") {
+        return NextResponse.json({ error: "Aquest producte ja no està disponible" }, { status: 409 });
+      }
+
+      const productSizes = Array.isArray(product.sizes) ? product.sizes : [];
+      const productStock = (product.stock ?? {}) as Record<string, number>;
+      if (!productSizes.includes(size)) {
+        return NextResponse.json({ error: "La talla seleccionada no és vàlida" }, { status: 400 });
+      }
+      if (Number(productStock[size] ?? 0) < 1) {
+        return NextResponse.json({ error: "Aquesta talla està esgotada" }, { status: 409 });
+      }
+
+      const productPrice = Number(product.price_eur);
+      if (!validPrice(productPrice)) {
+        return NextResponse.json({ error: "El preu del producte no és vàlid" }, { status: 409 });
+      }
+
+      let customization: string | undefined;
+      if (product.customizable && customNumber) {
+        if (typeof customNumber !== "string" || !/^\d{1,2}$/.test(customNumber)) {
+          return NextResponse.json({ error: "El dorsal no és vàlid" }, { status: 400 });
+        }
+        customization = `#${customNumber}`;
+      }
+
+      lineItems = [
+        {
+          price_data: {
+            currency: "eur",
+            product_data: {
+              name: product.name,
+              description: [size, customization].filter(Boolean).join(" · ") || undefined,
+            },
+            unit_amount: Math.round(productPrice * 100),
+          },
+          quantity: 1,
+        },
+      ];
+
+      metadata = {
+        ...metadata,
+        product_id: product.id,
+        product_slug: product.slug,
+        size,
+        custom_number: customization ? customNumber : "",
+        purchase_type: "merch",
+      };
     }
 
-    // ─── Membership ───────────────────────────────────────────────────────────
+    // Memberships keep their existing catalogue fallback, while preferring DB.
     else if (type === "membership") {
       const tierSlug = tierId ?? "soci-general";
       const catalogueTier = getMembershipTier(tierSlug);
 
       let tierName = catalogueTier?.name ?? "Soci General";
-      let tierPrice = catalogueTier?.price_eur ?? 110.00;
+      let tierPrice = catalogueTier?.price_eur ?? 110;
       let season = catalogueTier?.season ?? "2026/27";
       let tierDbId: string | undefined;
 
       try {
         const supabase = getSupabaseAdmin();
-        const { data: tier } = await supabase.from("membership_tiers").select("*").eq("slug", tierSlug).single();
+        const { data: tier } = await supabase
+          .from("membership_tiers")
+          .select("*")
+          .eq("slug", tierSlug)
+          .single();
         if (tier) {
           tierName = tier.name;
-          tierPrice = tier.price_eur;
+          tierPrice = Number(tier.price_eur);
           season = tier.season;
           tierDbId = tier.id;
         }
@@ -139,28 +218,39 @@ export async function POST(req: NextRequest) {
         console.warn("[Checkout] Supabase query fallback for tier:", err);
       }
 
-      lineItems = [{
-        price_data: {
-          currency: "eur",
-          product_data: { name: `${tierName} — Temporada ${season}`, description: "Quota de soci Club Futbol Juneda" },
-          unit_amount: Math.round(tierPrice * 100),
+      if (!validPrice(tierPrice)) {
+        return NextResponse.json({ error: "El preu de la quota no és vàlid" }, { status: 409 });
+      }
+
+      lineItems = [
+        {
+          price_data: {
+            currency: "eur",
+            product_data: {
+              name: `${tierName} — Temporada ${season}`,
+              description: "Quota de soci Club Futbol Juneda",
+            },
+            unit_amount: Math.round(tierPrice * 100),
+          },
+          quantity: 1,
         },
-        quantity: 1,
-      }];
+      ];
 
-      metadata = { ...metadata, tier_id: tierDbId ?? "", tier_slug: tierSlug, purchase_type: "membership" };
+      metadata = {
+        ...metadata,
+        tier_id: tierDbId ?? "",
+        tier_slug: tierSlug,
+        purchase_type: "membership",
+      };
     }
 
-    else {
-      return NextResponse.json({ error: "Tipus de compra no vàlid" }, { status: 400 });
-    }
-
-    // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: lineItems,
-      customer_email: email,
-      payment_method_types: ["card"],
+      customer_email: email.trim(),
+      // No fixem `payment_method_types`: així Stripe ofereix tots els mètodes
+      // activats al dashboard (targeta, Bizum, Apple Pay, Google Pay) segons
+      // el dispositiu del comprador. Declarar-los aquí els sobreescriuria.
       success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/#${type === "event" ? "esdeveniments" : type === "merch" ? "botiga" : "socis"}`,
       metadata,

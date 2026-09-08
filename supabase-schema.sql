@@ -107,6 +107,30 @@ CREATE INDEX IF NOT EXISTS idx_purchases_type    ON purchases(purchase_type);
 CREATE INDEX IF NOT EXISTS idx_purchases_status  ON purchases(payment_status);
 CREATE INDEX IF NOT EXISTS idx_purchases_created ON purchases(created_at DESC);
 
+-- ─── RPC: descompte atòmic de places ─────────────────────────────────────────
+-- El webhook de Stripe crida aquesta funció quan es confirma un pagament.
+-- GREATEST(...,0) evita que spots_remaining quedi negatiu si hi ha hagut una
+-- compra simultània; l'UPDATE és atòmic dins de la seva pròpia transacció.
+CREATE OR REPLACE FUNCTION decrement_spots(event_id UUID, amount INT)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE events
+     SET spots_remaining = GREATEST(spots_remaining - amount, 0),
+         status = CASE
+                    WHEN GREATEST(spots_remaining - amount, 0) = 0 AND status = 'active'
+                      THEN 'sold_out'
+                    ELSE status
+                  END
+   WHERE id = decrement_spots.event_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION decrement_spots(UUID, INT) FROM PUBLIC, anon, authenticated;
+
 -- Seed: Membership tiers (Campanya 2026/27 - Oficial image.png)
 INSERT INTO membership_tiers (slug, name, price_eur, season, benefits, status)
 VALUES
@@ -121,9 +145,9 @@ ON CONFLICT (slug) DO UPDATE SET
   season = EXCLUDED.season,
   benefits = EXCLUDED.benefits;
 
--- Events catalogue (title, date, price, description, ...) now lives in
--- content/events.json; lib/events.ts syncs it into this table by slug at
--- request time and this table only tracks live spots_remaining/status.
+-- Legacy events in content/events.json are synced here once. From then on,
+-- Supabase is the source of truth for the public catalogue, availability and
+-- checkout prices. Events created from /admin do not need a JSON entry.
 ALTER TABLE events ADD COLUMN IF NOT EXISTS slug TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS image_url TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_events_slug ON events(slug) WHERE slug IS NOT NULL;
@@ -155,4 +179,9 @@ DROP POLICY IF EXISTS "Service role full access purchases" ON purchases;
 CREATE POLICY "Public can read active events" ON events FOR SELECT USING (status = 'active');
 CREATE POLICY "Public can read active products" ON products FOR SELECT USING (status = 'active');
 CREATE POLICY "Public can read active tiers" ON membership_tiers FOR SELECT USING (status = 'active');
-CREATE POLICY "Service role full access purchases" ON purchases USING (true) WITH CHECK (true);
+-- `purchases` conté dades personals (nom, email, telèfon, intoleràncies).
+-- El service_role ja se salta l'RLS, així que NO cal cap policy: sense policy,
+-- l'RLS activat bloqueja completament el rol `anon` (la clau que viatja al
+-- navegador). Una policy `USING (true)` sense `TO service_role` s'aplicaria al
+-- rol públic i exposaria tota la taula.
+DROP POLICY IF EXISTS "Public read purchases" ON purchases;

@@ -57,7 +57,7 @@ export function KitViewer2D({ view, onViewChange }: KitViewer2DProps) {
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        className="relative h-[450px] w-full cursor-grab overflow-hidden rounded-2xl border border-black/10 bg-white select-none active:cursor-grabbing sm:h-[550px]"
+        className="relative h-[340px] w-full touch-pan-y cursor-grab overflow-hidden rounded-2xl border border-black/10 bg-white select-none active:cursor-grabbing sm:h-[450px] md:h-[550px]"
       >
         <AnimatePresence mode="wait">
           {view === "front" ? (

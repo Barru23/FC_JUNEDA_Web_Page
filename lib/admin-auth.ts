@@ -1,11 +1,24 @@
-﻿import { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
+
+/**
+ * La contrasenya d'administració, o null si no està configurada.
+ * En desenvolupament local acceptem "admin" per comoditat; en producció, si
+ * ADMIN_PASSWORD no està definida, el panell queda tancat en lloc de quedar
+ * obert amb una contrasenya per defecte que tothom coneix.
+ */
+export function getAdminPassword(): string | null {
+  const configured = process.env.ADMIN_PASSWORD?.trim();
+  if (configured) return configured;
+  return process.env.NODE_ENV === "production" ? null : "admin";
+}
 
 /**
  * Validates the admin session cookie or Authorization header.
- * Uses process.env.ADMIN_PASSWORD (defaults to "admin" in local development).
+ * Uses getAdminPassword(): tancat en producció si ADMIN_PASSWORD no hi és.
  */
 export function isAdminAuthenticated(req: NextRequest): boolean {
-  const expectedPassword = process.env.ADMIN_PASSWORD || "admin";
+  const expectedPassword = getAdminPassword();
+  if (!expectedPassword) return false;
 
   // Check session cookie
   const sessionCookie = req.cookies.get("admin_session");

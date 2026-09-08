@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { SectionHeading } from "./EventsSection";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import {
   Users,
   Smile,
@@ -39,6 +40,8 @@ export function SocisSection() {
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isMobile = useIsMobile();
+  const detailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/api/membership-tiers")
@@ -134,6 +137,11 @@ export function SocisSection() {
                   onClick={() => {
                     setSelectedSlug(tier.slug);
                     setError(null);
+                    if (isMobile) {
+                      requestAnimationFrame(() =>
+                        detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      );
+                    }
                   }}
                   whileHover={{ y: -3 }}
                   whileTap={{ scale: 0.98 }}
@@ -189,7 +197,7 @@ export function SocisSection() {
 
       {/* Detail Card and Registration Form */}
       {selectedTier && (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 items-start">
+        <div ref={detailRef} className="grid grid-cols-1 gap-8 lg:grid-cols-12 items-start scroll-mt-24">
           {/* Left: Selected Tier Details */}
           <motion.div
             key={selectedTier.slug}

@@ -111,21 +111,21 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="min-h-screen bg-carbon text-white">
       {/* Header */}
-      <header className="border-b border-white/10 bg-black/30 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-40">
-        <div className="flex items-center gap-4">
+      <header className="border-b border-white/10 bg-black/30 backdrop-blur-md px-6 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40">
+        <div className="flex min-w-0 items-center gap-4">
           <Crest className="h-7 w-[19px] shrink-0" />
           <a
             href="/admin"
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 transition-colors"
           >
             <ArrowLeft size={14} /> Tornar al panell
           </a>
-          <span className="text-white/30">/</span>
+          <span className="hidden text-white/30 sm:inline">/</span>
           <h1 className="font-display font-bold text-base text-white truncate max-w-xs md:max-w-md">
             {event?.title ?? "Detall de l'Esdeveniment"}
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={fetchData}
             className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/60 hover:text-white transition-colors"
@@ -217,8 +217,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               No s&apos;han trobat reserves amb aquest filtre.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto overscroll-x-contain">
+              <table className="w-full min-w-[720px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-white/10 text-xs font-bold uppercase tracking-wider text-white/40">
                     <th className="pb-3 pl-2">Assistent</th>

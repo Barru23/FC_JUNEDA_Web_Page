@@ -1,10 +1,15 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getAdminPassword } from "@/lib/admin-auth";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { password } = body;
-    const expectedPassword = process.env.ADMIN_PASSWORD || "admin";
+    const expectedPassword = getAdminPassword();
+    if (!expectedPassword) {
+      console.error("[Login] ADMIN_PASSWORD no està definida — accés bloquejat");
+      return NextResponse.json({ error: "El panell no està configurat" }, { status: 503 });
+    }
 
     if (password === expectedPassword) {
       const response = NextResponse.json({ success: true });

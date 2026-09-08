@@ -1,9 +1,10 @@
 ﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SectionHeading } from "./EventsSection";
 import { KitViewer2D } from "./KitViewer2D";
+import { Modal } from "@/components/ui/Modal";
 import { Loader2, ShoppingBag, X } from "lucide-react";
 
 type ViewType = "front" | "back";
@@ -15,21 +16,17 @@ type Product = {
   description: string | null;
   price_eur: number;
   sizes: string[];
+  swatches: string[];
+  customizable: boolean;
+  image_url: string | null;
   stock: Record<string, number>;
 };
 
-const DEFAULT_SIZES = ["S", "M", "L", "XL", "NEN/A"];
-const FALLBACK_PRODUCT = {
-  slug: "1a-equipacio",
-  name: "Conjunt Oficial Juneda",
-  description:
-    "La pell de l'equip per a la nova temporada a Segona Catalana. Samarreta vermella amb trama diagonal blava de disseny exclusiu, escut brodat del club, i els patrocinis oficials de la comarca. Completa amb pantaló blau marí i mitgetes oficials de joc.",
-  price_eur: 39.9,
-  sizes: DEFAULT_SIZES,
-};
-
 export function ShopSection() {
+  const [products, setProducts] = useState<Product[]>([]);
   const [product, setProduct] = useState<Product | null>(null);
+  const [catalogueLoading, setCatalogueLoading] = useState(true);
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [view, setView] = useState<ViewType>("front");
   const [size, setSize] = useState<string>("M");
   const [customize, setCustomize] = useState(false);
@@ -43,41 +40,54 @@ export function ShopSection() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Price, name, description, sizes and stock come from Supabase so the
-  // Junta can edit them from /admin and the web + Stripe charge stay in
-  // sync — a hardcoded price here previously drifted from what the DB
-  // (and therefore checkout) actually charged.
-  useEffect(() => {
-    fetch("/api/products")
-      .then((r) => r.json())
-      .then((data: Product[]) => {
-        const found = data.find((p) => p.slug === "1a-equipacio") ?? data[0];
-        if (found) {
-          setProduct(found);
-          if ((found.stock?.[size] ?? 1) <= 0) {
-            const firstAvailable = (found.sizes ?? DEFAULT_SIZES).find((s) => (found.stock?.[s] ?? 1) > 0);
-            if (firstAvailable) setSize(firstAvailable);
-          }
-        }
-      })
-      .catch(() => {
-        // Keep the FALLBACK_PRODUCT values already reflected in defaults below.
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Supabase is the only merchandise catalogue and price source. Refresh on
+  // focus as well, so an admin change is reflected without a deployment.
+  const loadProducts = useCallback(async () => {
+    try {
+      const response = await fetch("/api/products", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "No s'ha pogut carregar la botiga");
+      if (!Array.isArray(data)) throw new Error("Resposta de botiga no vàlida");
+
+      const nextProducts = data as Product[];
+      setProducts(nextProducts);
+      setProduct((current) => nextProducts.find((item) => item.id === current?.id) ?? nextProducts[0] ?? null);
+      setCatalogueError(null);
+    } catch (err) {
+      setCatalogueError(err instanceof Error ? err.message : "No s'ha pogut carregar la botiga");
+    } finally {
+      setCatalogueLoading(false);
+    }
   }, []);
 
-  const name = product?.name ?? FALLBACK_PRODUCT.name;
-  const description = product?.description ?? FALLBACK_PRODUCT.description;
-  const price = product?.price_eur ?? FALLBACK_PRODUCT.price_eur;
-  const sizes = product?.sizes?.length ? product.sizes : FALLBACK_PRODUCT.sizes;
+  useEffect(() => {
+    loadProducts();
+    window.addEventListener("focus", loadProducts);
+    return () => window.removeEventListener("focus", loadProducts);
+  }, [loadProducts]);
+
+  useEffect(() => {
+    if (!product) return;
+    const firstSize = product.sizes.find((item) => Number(product.stock?.[item] ?? 0) > 0) ?? product.sizes[0] ?? "";
+    setSize(firstSize);
+    setCustomize(false);
+    setNumber("");
+    setView("front");
+  }, [product?.id]);
+
+  const name = product?.name ?? "";
+  const description = product?.description ?? "";
+  const price = Number(product?.price_eur ?? 0);
+  const sizes = product?.sizes ?? [];
   const stock = product?.stock ?? {};
-  const selectedSizeOutOfStock = (stock[size] ?? 1) <= 0;
+  const selectedSizeOutOfStock = !product || !size || Number(stock[size] ?? 0) <= 0;
 
   const handleCustomFocus = () => {
     setView("back");
   };
 
   const handleOpenCheckout = () => {
+    if (!product) return;
     setError(null);
     setCheckoutModalOpen(true);
   };
@@ -96,7 +106,7 @@ export function ShopSection() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "merch",
-          productId: product?.slug ?? FALLBACK_PRODUCT.slug,
+          productId: product?.slug,
           size,
           customNumber: customize ? number.trim() : undefined,
           guestName: buyerName.trim(),
@@ -120,7 +130,38 @@ export function ShopSection() {
     <section id="botiga" className="relative z-10 px-6 py-20 md:px-10">
       <SectionHeading label="Botiga Oficial" title="Marxandatge del Club" />
 
+      {catalogueLoading && !product && (
+        <div className="mb-6 h-56 animate-pulse rounded-3xl border border-white/10 bg-white/[0.03]" />
+      )}
+
+      {!catalogueLoading && !product && (
+        <div className="mb-6 rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center text-sm text-white/50">
+          {catalogueError ?? "Ara mateix no hi ha productes publicats."}
+        </div>
+      )}
+
+      {products.length > 1 && (
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+          {products.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setProduct(item)}
+              className={`rounded-2xl border p-4 text-left transition-colors ${
+                item.id === product?.id
+                  ? "border-brand bg-brand/10"
+                  : "border-white/10 bg-white/[0.02] hover:border-white/25"
+              }`}
+            >
+              <span className="block truncate text-sm font-bold text-white">{item.name}</span>
+              <span className="mt-1 block font-display text-lg font-extrabold text-brand">{Number(item.price_eur).toFixed(2)} €</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Main product showcase wrapper */}
+      {product && (
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -130,7 +171,19 @@ export function ShopSection() {
       >
         {/* Left Panel: Jersey Photo Viewer */}
         <div className="lg:col-span-7">
-          <KitViewer2D view={view} onViewChange={setView} />
+          {product.image_url ? (
+            <div className="flex h-[340px] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white sm:h-[450px] md:h-[550px]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={product.image_url} alt={product.name} className="h-full w-full object-contain" />
+            </div>
+          ) : product.slug === "1a-equipacio" ? (
+            <KitViewer2D view={view} onViewChange={setView} />
+          ) : (
+            <div className="flex h-[340px] flex-col items-center justify-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] text-white/30 sm:h-[450px] md:h-[550px]">
+              <ShoppingBag size={56} strokeWidth={1.2} />
+              <span className="text-xs uppercase tracking-widest">Producte oficial</span>
+            </div>
+          )}
         </div>
 
         {/* Right Panel: Product Configurator and Checkout Form */}
@@ -138,7 +191,7 @@ export function ShopSection() {
           <div className="flex flex-col gap-6">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-brand">
-                1a EQUIPACIÓ OFICIAL 2026/2027
+                PRODUCTE OFICIAL CF JUNEDA
               </span>
               <h3 className="font-display mt-2 text-3xl font-extrabold text-white md:text-4xl">
                 {name}
@@ -149,16 +202,16 @@ export function ShopSection() {
             </div>
 
             {/* Colors Swatch Display */}
-            <div>
+            {!!product.swatches?.length && <div>
               <span className="text-xs font-bold uppercase tracking-wider text-white/40">
                 Colors Oficials
               </span>
               <div className="mt-2.5 flex items-center gap-2">
-                <span className="h-6 w-6 rounded-full border border-white/20 bg-[#e10600]" title="Vermell Oficial" />
-                <span className="h-6 w-6 rounded-full border border-white/20 bg-[#0b2e83]" title="Detalls Blau Marí" />
-                <span className="h-6 w-6 rounded-full border border-white/20 bg-[#ffffff]" title="Detalls en Blanc" />
+                {product.swatches.map((color) => (
+                  <span key={color} className="h-6 w-6 rounded-full border border-white/20" style={{ backgroundColor: color }} title={color} />
+                ))}
               </div>
-            </div>
+            </div>}
 
             {/* Size Selector */}
             <div>
@@ -190,7 +243,7 @@ export function ShopSection() {
             </div>
 
             {/* Customization Details */}
-            <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+            {product.customizable && <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
               <label className="flex cursor-pointer items-center gap-3 text-xs font-bold uppercase tracking-wider text-white/70">
                 <input
                   type="checkbox"
@@ -199,7 +252,7 @@ export function ShopSection() {
                     setCustomize(e.target.checked);
                     if (e.target.checked) handleCustomFocus();
                   }}
-                  className="h-4.5 w-4.5 accent-brand rounded cursor-pointer"
+                  className="h-5 w-5 accent-brand rounded cursor-pointer"
                 />
                 <span>Personalitzar dorsal (+0.00 €)</span>
               </label>
@@ -222,11 +275,11 @@ export function ShopSection() {
                   )}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
 
           {/* Pricing and Submit Button */}
-          <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-6">
+          <div className="mt-8 flex flex-col gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
                 Preu Total
@@ -238,7 +291,7 @@ export function ShopSection() {
             <button
               onClick={handleOpenCheckout}
               disabled={selectedSizeOutOfStock}
-              className="group relative flex items-center justify-center gap-2 rounded-full bg-brand px-10 py-4 font-display text-sm font-extrabold uppercase tracking-widest text-white transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_24px_rgba(225,6,0,0.6)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:shadow-none"
+              className="group relative flex w-full items-center justify-center gap-2 rounded-full bg-brand px-10 py-4 font-display text-sm font-extrabold uppercase tracking-widest text-white transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_24px_rgba(225,6,0,0.6)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:shadow-none sm:w-auto"
             >
               <ShoppingBag size={16} />
               {selectedSizeOutOfStock ? "Talla esgotada" : "Comprar"}
@@ -246,16 +299,22 @@ export function ShopSection() {
           </div>
         </div>
       </motion.div>
+      )}
 
       {/* Checkout details modal */}
       <AnimatePresence>
         {checkoutModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <Modal onClose={() => setCheckoutModalOpen(false)} ariaLabel="Finalitzar comanda">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            onClick={() => setCheckoutModalOpen(false)}
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 backdrop-blur-xl"
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[85svh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-surface p-6 backdrop-blur-xl"
             >
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -364,6 +423,7 @@ export function ShopSection() {
               </form>
             </motion.div>
           </div>
+          </Modal>
         )}
       </AnimatePresence>
     </section>

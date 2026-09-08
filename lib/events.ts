@@ -1,18 +1,10 @@
-// lib/events.ts
-//
-// The events catalogue (title/date/time/price/description/menu/...) lives
-// in content/events.json so the club can add or edit an event without
-// touching any component. Supabase only tracks what genuinely needs to be
-// live — spots_remaining and status — keyed by the catalogue's `slug`
-// (see the events.slug column added in supabase-schema.sql). syncEventCatalogue
-// makes sure every active catalogue entry has a matching DB row to sell
-// tickets against; mergeEvent combines the two into the public ClubEvent shape.
-
 import type { SupabaseClient } from "@supabase/supabase-js";
 import eventsJson from "@/content/events.json";
 import type { DbEvent } from "./supabase";
 import type { ClubEvent } from "./data";
 
+// The JSON catalogue is retained only to seed legacy events. Supabase is the
+// live source of truth for public details, availability and checkout prices.
 export interface EventCatalogueEntry {
   slug: string;
   title: string;
@@ -32,65 +24,63 @@ export interface EventCatalogueEntry {
 export const eventCatalogue: EventCatalogueEntry[] = eventsJson as EventCatalogueEntry[];
 
 export function getCatalogueEntry(slug: string): EventCatalogueEntry | undefined {
-  return eventCatalogue.find((e) => e.slug === slug);
+  return eventCatalogue.find((event) => event.slug === slug);
 }
 
 /**
- * Inserts a Supabase row for any active catalogue entry that doesn't have
- * one yet (matched by slug). Never touches an existing row, so live
- * spots_remaining from past sales is untouched.
+ * Inserts a database row for legacy catalogue entries that do not have one.
+ * Existing rows are never overwritten, so admin edits and sold spots win.
  */
 export async function syncEventCatalogue(supabase: SupabaseClient): Promise<void> {
-  const { data: existing, error } = await supabase.from("events").select("slug").not("slug", "is", null);
+  const { data: existing, error } = await supabase
+    .from("events")
+    .select("slug")
+    .not("slug", "is", null);
   if (error) throw error;
 
-  const existingSlugs = new Set((existing ?? []).map((r: { slug: string | null }) => r.slug));
-  const missing = eventCatalogue.filter((e) => e.status === "active" && !existingSlugs.has(e.slug));
+  const existingSlugs = new Set((existing ?? []).map((row: { slug: string | null }) => row.slug));
+  const missing = eventCatalogue.filter((event) => event.status === "active" && !existingSlugs.has(event.slug));
   if (missing.length === 0) return;
 
-  const { error: insertErr } = await supabase.from("events").insert(
-    missing.map((e) => ({
-      slug: e.slug,
-      title: e.title,
-      description: e.description,
-      event_type: e.eventType,
-      date: e.date,
-      location: e.location,
-      menu: e.menu,
-      image_url: e.imageUrl ?? null,
-      price_eur: e.priceEur,
-      total_spots: e.totalSpots,
-      spots_remaining: e.totalSpots,
-      booking_fee_eur: e.bookingFeeEur,
+  const { error: insertError } = await supabase.from("events").insert(
+    missing.map((event) => ({
+      slug: event.slug,
+      title: event.title,
+      description: event.description,
+      event_type: event.eventType,
+      date: event.date,
+      location: event.location,
+      menu: event.menu,
+      image_url: event.imageUrl ?? null,
+      price_eur: event.priceEur,
+      total_spots: event.totalSpots,
+      spots_remaining: event.totalSpots,
+      booking_fee_eur: event.bookingFeeEur,
       status: "active",
     }))
   );
-  if (insertErr) throw insertErr;
+  if (insertError) throw insertError;
 }
 
-/**
- * Combines a catalogue entry with its live Supabase row (if any) into the
- * public ClubEvent shape. The DB row wins on every field it owns — the JSON
- * catalogue only seeds a NEW event (see syncEventCatalogue); once the row
- * exists, editing it from the admin panel is what the public site reflects.
- * `time` is the one exception: there's no events.time column, so it always
- * comes from the catalogue.
- */
-export function mergeEvent(entry: EventCatalogueEntry, dbRow?: DbEvent): ClubEvent {
+/** Maps a live database event to the shape consumed by the public page. */
+export function mapDbEvent(row: DbEvent): ClubEvent {
+  const catalogueEntry = row.slug ? getCatalogueEntry(row.slug) : undefined;
+
   return {
-    id: entry.slug,
-    dbId: dbRow?.id,
-    title: dbRow?.title ?? entry.title,
-    date: dbRow?.date ?? entry.date,
-    time: entry.time,
-    location: dbRow?.location ?? entry.location,
-    menu: dbRow?.menu ?? entry.menu,
-    description: dbRow?.description ?? entry.description,
-    imageUrl: dbRow?.image_url ?? entry.imageUrl ?? null,
-    price: dbRow?.price_eur ?? entry.priceEur,
-    spotsLeft: dbRow?.spots_remaining ?? entry.totalSpots,
-    totalSpots: dbRow?.total_spots ?? entry.totalSpots,
-    status: dbRow?.status ?? entry.status,
-    bookingFee: dbRow?.booking_fee_eur ?? entry.bookingFeeEur,
+    id: row.slug ?? row.id,
+    dbId: row.id,
+    title: row.title,
+    date: row.date,
+    // There is no separate time column yet; legacy events can retain theirs.
+    time: catalogueEntry?.time,
+    location: row.location,
+    menu: row.menu ?? "",
+    description: row.description ?? undefined,
+    imageUrl: row.image_url,
+    price: Number(row.price_eur),
+    spotsLeft: row.spots_remaining,
+    totalSpots: row.total_spots,
+    status: row.status,
+    bookingFee: Number(row.booking_fee_eur ?? 0),
   };
 }

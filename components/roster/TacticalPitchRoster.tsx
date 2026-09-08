@@ -14,6 +14,7 @@ import {
   POSITIONS,
   type SquadPosition,
 } from "@/lib/squad";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { motion, AnimatePresence } from "framer-motion";
 import { Users, RotateCcw, Sparkles, LayoutGrid, Award } from "lucide-react";
 
@@ -21,37 +22,14 @@ type ActiveRow = SquadPosition | "Staff" | "Capitans" | "Tots" | null;
 
 const CAPTAIN_ORDINALS = ["1r", "2n", "3r", "4t", "5è"];
 
-/**
- * Hook lleuger per detectar si estem en pantalla petita (mòbil)
- */
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-
-    let frame: number | null = null;
-    const onResize = () => {
-      if (frame !== null) return;
-      frame = requestAnimationFrame(() => {
-        frame = null;
-        check();
-      });
-    };
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      if (frame !== null) cancelAnimationFrame(frame);
-    };
-  }, []);
-
-  return isMobile;
-}
-
 export function TacticalPitchRoster() {
   const [activeRow, setActiveRow] = useState<ActiveRow>(null);
-  const [viewMode, setViewMode] = useState<"3d" | "list">("3d");
+  // Starts as "list" regardless of device: WebGL is too heavy for most
+  // phones, and defaulting to "3d" here would mount the Canvas (and
+  // PitchBoard's 1536x1024 texture generation) for a mobile visitor for one
+  // frame before the isMobile effect below corrects it back to "list". The
+  // manual toggle further down still lets a mobile user opt back into 3D.
+  const [viewMode, setViewMode] = useState<"3d" | "list">("list");
   const [detailedId, setDetailedId] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const staffMembers = useMemo(() => getStaff(), []);
@@ -61,10 +39,8 @@ export function TacticalPitchRoster() {
     return Object.fromEntries(entries) as Record<SquadPosition, ReturnType<typeof getAllByPosition>>;
   }, []);
 
-  // WebGL is too heavy for most phones — force the 2D list on mobile.
-  // The manual toggle below still lets a mobile user opt back into 3D.
   useEffect(() => {
-    if (isMobile) setViewMode("list");
+    setViewMode(isMobile ? "list" : "3d");
   }, [isMobile]);
 
   // Toggle: clicking the already-detailed card again closes it (mirrors the

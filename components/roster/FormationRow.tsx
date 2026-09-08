@@ -121,7 +121,7 @@ export function FormationRow({
           <span className="font-display text-[13px] font-bold uppercase tracking-wider">
             {config.label}
           </span>
-          <span className="rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-semibold text-white/80">
+          <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/80">
             {allPlayers.length}
           </span>
         </div>

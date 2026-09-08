@@ -3,10 +3,13 @@
 import { motion } from "framer-motion";
 import { useEffect } from "react";
 import { Crest } from "./Crest";
+import { useScrollLock } from "@/lib/hooks/useScrollLock";
 
 const HOLD_MS = 1900;
 
 export function Loader({ onComplete }: { onComplete: () => void }) {
+  useScrollLock(true);
+
   useEffect(() => {
     const t = setTimeout(onComplete, HOLD_MS);
     return () => clearTimeout(t);

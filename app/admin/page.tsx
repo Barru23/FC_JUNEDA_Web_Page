@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { DashboardStats, Purchase } from "@/lib/data";
 import { Crest } from "@/components/Crest";
+import { Modal } from "@/components/ui/Modal";
 
 function getToken(): string {
   return sessionStorage.getItem("admin_token") ?? "";
@@ -139,18 +140,19 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
   const inputCls = "w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-brand transition-colors";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-surface p-6 max-h-[90vh] overflow-y-auto">
+    <Modal onClose={onClose} ariaLabel={isEdit ? "Editar esdeveniment" : "Nou esdeveniment"}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-surface p-6 max-h-[90vh] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-display text-xl font-bold text-white">{isEdit ? "Editar Esdeveniment" : "Nou Esdeveniment"}</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
         </div>
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
+        <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
             <label className="label">Nom de l&apos;esdeveniment *</label>
             <input className={inputCls} value={form.title} onChange={e => set("title", e.target.value)} required placeholder="Sopar de Temporada 2026/27" />
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="label">Descripció</label>
             <input className={inputCls} value={form.description} onChange={e => set("description", e.target.value)} placeholder="El sopar anual del club per celebrar la temporada" />
           </div>
@@ -167,15 +169,15 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
               <option value="other">Altre</option>
             </select>
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="label">Lloc *</label>
             <input className={inputCls} value={form.location} onChange={e => set("location", e.target.value)} required placeholder="Pavelló Municipal de Juneda" />
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="label">Menú</label>
             <input className={inputCls} value={form.menu} onChange={e => set("menu", e.target.value)} placeholder="Menú 3 plats + postres + vi" />
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="label">URL de la imatge</label>
             <input className={inputCls} value={form.image_url} onChange={e => set("image_url", e.target.value)} placeholder="https://..." />
             {form.image_url.trim() && (
@@ -185,24 +187,24 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
           </div>
           <div>
             <label className="label">Preu (€) *</label>
-            <input className={inputCls} type="number" step="0.01" value={form.price_eur} onChange={e => set("price_eur", e.target.value)} required placeholder="18.00" />
+            <input className={inputCls} type="number" min="0.01" step="0.01" value={form.price_eur} onChange={e => set("price_eur", e.target.value)} required placeholder="18.00" />
           </div>
           <div>
             <label className="label">Places totals *</label>
-            <input className={inputCls} type="number" value={form.total_spots} onChange={e => set("total_spots", e.target.value)} required placeholder="150" />
+            <input className={inputCls} type="number" min="1" value={form.total_spots} onChange={e => set("total_spots", e.target.value)} required placeholder="150" />
           </div>
           <div>
             <label className="label">Taxa de gestió (€)</label>
-            <input className={inputCls} type="number" step="0.01" value={form.booking_fee_eur} onChange={e => set("booking_fee_eur", e.target.value)} placeholder="0.75" />
+            <input className={inputCls} type="number" min="0" step="0.01" value={form.booking_fee_eur} onChange={e => set("booking_fee_eur", e.target.value)} placeholder="0.75" />
           </div>
           {isEdit && (
             <div>
               <label className="label">Places disponibles</label>
-              <input className={inputCls} type="number" value={form.spots_remaining} onChange={e => set("spots_remaining", e.target.value)} />
+              <input className={inputCls} type="number" min="0" max={form.total_spots || undefined} value={form.spots_remaining} onChange={e => set("spots_remaining", e.target.value)} />
             </div>
           )}
           {isEdit && (
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="label">Estat</label>
               <select className={inputCls} value={form.status} onChange={e => set("status", e.target.value)}>
                 <option value="active">Actiu</option>
@@ -211,8 +213,8 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
               </select>
             </div>
           )}
-          {error && <p className="col-span-2 text-xs text-red-400 bg-red-500/10 rounded px-3 py-2">{error}</p>}
-          <div className="col-span-2 flex gap-3 mt-2">
+          {error && <p className="sm:col-span-2 text-xs text-red-400 bg-red-500/10 rounded px-3 py-2">{error}</p>}
+          <div className="sm:col-span-2 flex gap-3 mt-2">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-white/15 py-3 text-sm text-white/70">Cancel·lar</button>
             <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-brand py-3 text-sm font-bold text-white disabled:opacity-40 flex items-center justify-center gap-2">
               {loading ? <><Loader2 size={14} className="animate-spin" />Desant...</> : isEdit ? "Desar Canvis" : "Crear Esdeveniment"}
@@ -221,44 +223,62 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
         </form>
       </div>
     </div>
+    </Modal>
   );
 }
 
 // ─── Product Modal (edit) ──────────────────────────────────────────────────────
 type AdminProduct = {
-  id: string; name: string; description?: string | null; price_eur: number;
-  sizes: string[]; stock: Record<string, number>; status: string;
+  id: string; slug: string; name: string; description?: string | null; price_eur: number;
+  sizes: string[]; swatches: string[]; customizable: boolean; image_url?: string | null;
+  stock: Record<string, number>; status: string;
 };
 
-function ProductModal({ product, onClose, onSaved }: { product: AdminProduct; onClose: () => void; onSaved: () => void }) {
+function parseList(value: string): string[] {
+  return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
+}
+
+function ProductModal({ product, onClose, onSaved }: { product?: AdminProduct; onClose: () => void; onSaved: () => void }) {
+  const isEdit = !!product;
   const [form, setForm] = useState({
-    name: product.name,
-    description: product.description ?? "",
-    price_eur: String(product.price_eur),
-    status: product.status,
-    stock: { ...product.stock },
+    name: product?.name ?? "",
+    description: product?.description ?? "",
+    price_eur: product ? String(product.price_eur) : "",
+    sizes: product?.sizes?.join(", ") ?? "Única",
+    swatches: product?.swatches?.join(", ") ?? "",
+    customizable: product?.customizable ?? false,
+    image_url: product?.image_url ?? "",
+    status: product?.status ?? "active",
+    stock: { ...(product?.stock ?? {}) },
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const setStock = (size: string, v: string) => setForm((f) => ({ ...f, stock: { ...f.stock, [size]: parseInt(v) || 0 } }));
+  const sizes = parseList(form.sizes);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
+      const payload: Record<string, unknown> = {
+        name: form.name,
+        description: form.description,
+        price_eur: parseFloat(form.price_eur),
+        sizes,
+        swatches: parseList(form.swatches),
+        customizable: form.customizable,
+        image_url: form.image_url,
+        status: form.status,
+        stock: Object.fromEntries(sizes.map((size) => [size, form.stock[size] ?? 0])),
+      };
+      if (isEdit) payload.id = product!.id;
+
       const res = await fetch("/api/admin/products", {
-        method: "PATCH",
+        method: isEdit ? "PATCH" : "POST",
         headers: authHeaders(),
-        body: JSON.stringify({
-          id: product.id,
-          name: form.name,
-          description: form.description,
-          price_eur: parseFloat(form.price_eur),
-          status: form.status,
-          stock: form.stock,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -273,10 +293,11 @@ function ProductModal({ product, onClose, onSaved }: { product: AdminProduct; on
   const inputCls = "w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-brand transition-colors";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-surface p-6 max-h-[90vh] overflow-y-auto">
+    <Modal onClose={onClose} ariaLabel={isEdit ? "Editar producte" : "Nou producte"}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-surface p-6 max-h-[90vh] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-display text-xl font-bold text-white">Editar Producte</h2>
+          <h2 className="font-display text-xl font-bold text-white">{isEdit ? "Editar Producte" : "Nou Producte"}</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="flex flex-col gap-3">
@@ -286,12 +307,12 @@ function ProductModal({ product, onClose, onSaved }: { product: AdminProduct; on
           </div>
           <div>
             <label className="label">Descripció</label>
-            <input className={inputCls} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            <textarea className={`${inputCls} min-h-20 resize-y`} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label">Preu (€) *</label>
-              <input className={inputCls} type="number" step="0.01" value={form.price_eur} onChange={e => setForm(f => ({ ...f, price_eur: e.target.value }))} required />
+              <input className={inputCls} type="number" min="0.01" step="0.01" value={form.price_eur} onChange={e => setForm(f => ({ ...f, price_eur: e.target.value }))} required />
             </div>
             <div>
               <label className="label">Estat</label>
@@ -303,15 +324,20 @@ function ProductModal({ product, onClose, onSaved }: { product: AdminProduct; on
             </div>
           </div>
           <div>
-            <label className="label">Estoc per talla</label>
-            <div className="grid grid-cols-3 gap-2 mt-1">
-              {Object.keys(form.stock).map((s) => (
+            <label className="label">Talles o variants *</label>
+            <input className={inputCls} value={form.sizes} onChange={e => setForm(f => ({ ...f, sizes: e.target.value }))} required placeholder="S, M, L, XL o Única" />
+            <p className="mt-1 text-[10px] text-white/35">Separa-les amb comes. Per a una bufanda, pots posar “Única”.</p>
+          </div>
+          <div>
+            <label className="label">Estoc per talla o variant</label>
+            <div className="grid grid-cols-2 gap-2 mt-1 sm:grid-cols-3">
+              {sizes.map((s) => (
                 <div key={s} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5">
                   <span className="text-xs font-bold text-white/50 w-10">{s}</span>
                   <input
                     type="number"
                     min="0"
-                    value={form.stock[s]}
+                    value={form.stock[s] ?? 0}
                     onChange={(e) => setStock(s, e.target.value)}
                     className="w-full bg-transparent text-sm text-white outline-none"
                   />
@@ -319,16 +345,33 @@ function ProductModal({ product, onClose, onSaved }: { product: AdminProduct; on
               ))}
             </div>
           </div>
+          <div>
+            <label className="label">URL de la imatge</label>
+            <input className={inputCls} value={form.image_url} onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))} placeholder="https://..." />
+            {form.image_url.trim() && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={form.image_url.trim()} alt="" className="mt-2 h-24 w-full rounded-lg object-contain bg-white/5" />
+            )}
+          </div>
+          <div>
+            <label className="label">Colors (opcional)</label>
+            <input className={inputCls} value={form.swatches} onChange={e => setForm(f => ({ ...f, swatches: e.target.value }))} placeholder="#E10600, #0B2E83" />
+          </div>
+          <label className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-3 text-sm text-white/70">
+            <input type="checkbox" checked={form.customizable} onChange={e => setForm(f => ({ ...f, customizable: e.target.checked }))} className="h-4 w-4 accent-brand" />
+            Permetre dorsal personalitzat
+          </label>
           {error && <p className="text-xs text-red-400 bg-red-500/10 rounded px-3 py-2">{error}</p>}
           <div className="flex gap-3 mt-2">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-white/15 py-3 text-sm text-white/70">Cancel·lar</button>
             <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-brand py-3 text-sm font-bold text-white disabled:opacity-40 flex items-center justify-center gap-2">
-              {loading ? <><Loader2 size={14} className="animate-spin" />Desant...</> : "Desar Canvis"}
+              {loading ? <><Loader2 size={14} className="animate-spin" />Desant...</> : isEdit ? "Desar Canvis" : "Crear Producte"}
             </button>
           </div>
         </form>
       </div>
     </div>
+    </Modal>
   );
 }
 
@@ -366,8 +409,9 @@ function CashModal({ events, onClose, onCreated }: {
   const inputCls = "w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-brand transition-colors";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6">
+    <Modal onClose={onClose} ariaLabel="Registrar pagament en efectiu">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 max-h-[90vh] overflow-y-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-display text-xl font-bold text-white">Pagament en Efectiu 💵</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
@@ -398,7 +442,7 @@ function CashModal({ events, onClose, onCreated }: {
             <label className="label">Email</label>
             <input className={inputCls} type="email" value={form.buyer_email} onChange={e => set("buyer_email", e.target.value)} placeholder="joan@exemple.com" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {form.purchase_type === "event" && (
               <div>
                 <label className="label">Tiquets</label>
@@ -420,6 +464,7 @@ function CashModal({ events, onClose, onCreated }: {
         </form>
       </div>
     </div>
+    </Modal>
   );
 }
 
@@ -432,7 +477,7 @@ export default function AdminDashboard() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [eventModalTarget, setEventModalTarget] = useState<AdminEvent | "new" | null>(null);
-  const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
+  const [productModalTarget, setProductModalTarget] = useState<AdminProduct | "new" | null>(null);
   const [showCash, setShowCash] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "event" | "merch" | "membership">("all");
   const masterSheetId = process.env.NEXT_PUBLIC_MASTER_SHEET_ID ?? "";
@@ -481,7 +526,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-carbon text-white">
       {/* Header */}
-      <header className="border-b border-white/10 bg-black/30 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-40">
+      <header className="border-b border-white/10 bg-black/30 backdrop-blur-md px-6 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40">
         <div>
           <div className="flex items-center gap-2">
             <Crest className="h-7 w-[19px]" />
@@ -490,7 +535,7 @@ export default function AdminDashboard() {
             <span className="text-white/60 text-sm">Panell d&apos;Administració</span>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button onClick={fetchData} className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60 hover:text-white transition-colors">
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Actualitzar
           </button>
@@ -583,6 +628,9 @@ export default function AdminDashboard() {
             {/* Botiga panel */}
             <div className="flex items-center justify-between mb-4 mt-8">
               <h2 className="font-display text-lg font-bold text-white">Botiga</h2>
+              <button onClick={() => setProductModalTarget("new")} className="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-xs font-bold text-white hover:opacity-90 transition-opacity">
+                <Plus size={13} /> Nou
+              </button>
             </div>
             <div className="flex flex-col gap-3">
               {products.length === 0 && !loading && (
@@ -599,7 +647,7 @@ export default function AdminDashboard() {
                           {p.status}
                         </span>
                         <button
-                          onClick={() => setEditingProduct(p)}
+                          onClick={() => setProductModalTarget(p)}
                           className="rounded-md p-1 text-white/40 hover:text-white hover:bg-white/10"
                           aria-label="Editar producte"
                         >
@@ -701,11 +749,11 @@ export default function AdminDashboard() {
           onSaved={() => { setEventModalTarget(null); fetchData(); }}
         />
       )}
-      {editingProduct && (
+      {productModalTarget && (
         <ProductModal
-          product={editingProduct}
-          onClose={() => setEditingProduct(null)}
-          onSaved={() => { setEditingProduct(null); fetchData(); }}
+          product={productModalTarget === "new" ? undefined : productModalTarget}
+          onClose={() => setProductModalTarget(null)}
+          onSaved={() => { setProductModalTarget(null); fetchData(); }}
         />
       )}
       {showCash && <CashModal events={events} onClose={() => setShowCash(false)} onCreated={() => { setShowCash(false); fetchData(); }} />}

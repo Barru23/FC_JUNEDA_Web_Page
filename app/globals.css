@@ -3,8 +3,15 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-carbon text-neutral-100 font-body;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   a {
@@ -17,10 +24,37 @@
   ::selection {
     @apply bg-brand text-white;
   }
+
+  /* Admin form field labels (app/admin/**) share this class */
+  .label {
+    @apply block text-[11px] font-bold uppercase tracking-wider text-white/50 mb-1;
+  }
+
+  /* iOS Safari zooms the viewport on focus of any field under 16px — this
+     keeps desktop's text-sm untouched and only bumps mobile. */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-drift1,
+    .animate-drift2,
+    .animate-drift3 {
+      animation: none;
+    }
+  }
 }
 
 .text-wrap-pretty {
   text-wrap: pretty;
+}
+
+.pb-safe {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
 }
 
 @keyframes drift1 {

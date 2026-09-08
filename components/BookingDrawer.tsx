@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import type { ClubEvent } from "@/lib/data";
+import { Modal } from "@/components/ui/Modal";
 
 const DIETARY_OPTIONS = [
   "Cap intolerancia",
@@ -42,7 +43,7 @@ export function BookingDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "event",
-          eventId: event.id,
+          eventId: event.dbId ?? event.id,
           quantity,
           guestName,
           dietary,
@@ -63,7 +64,7 @@ export function BookingDrawer({
   const steps = ["Tiquets", "Dietètica", "Contacte", "Confirmació"];
 
   return (
-    <AnimatePresence>
+    <Modal onClose={onClose} ariaLabel={`Reserva per a ${event.title}`}>
       <motion.div
         className="fixed inset-0 z-50 bg-black/70"
         initial={{ opacity: 0 }}
@@ -72,17 +73,17 @@ export function BookingDrawer({
         onClick={onClose}
       />
       <motion.div
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col gap-6 border-l border-white/10 bg-surface p-8"
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-white/10 bg-surface"
         initial={{ x: "100%" }}
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
         transition={{ type: "spring", damping: 28, stiffness: 260 }}
       >
         {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex shrink-0 items-start justify-between gap-4 p-5 pb-4 sm:p-8 sm:pb-6">
+          <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.14em] text-brand">Reserva</p>
-            <h3 className="font-display text-2xl font-bold">{event.title}</h3>
+            <h3 className="font-display truncate text-2xl font-bold">{event.title}</h3>
             <p className="mt-1 text-sm text-white/50">
               {event.date} · {event.location}
             </p>
@@ -90,134 +91,153 @@ export function BookingDrawer({
           <button
             onClick={onClose}
             aria-label="Tancar"
-            className="rounded-full border border-white/10 p-2 text-white/60 hover:text-white"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 text-white/60 hover:text-white"
           >
             <X size={16} />
           </button>
         </div>
 
-        {/* Step indicators */}
-        <div className="flex gap-2 text-[11px] uppercase tracking-[0.1em] text-white/40">
-          {steps.map((label, i) => (
-            <span key={label} className={`flex items-center gap-2 ${step >= i + 1 ? "text-brand" : ""}`}>
-              {i > 0 && <span className="text-white/20">—</span>}
-              {i + 1}. {label}
+        {/* Step indicator: compact on mobile, full labels from sm: */}
+        <div className="shrink-0 px-5 sm:px-8">
+          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.1em] text-white/40 sm:hidden">
+            <span>
+              Pas {step} de {steps.length}
             </span>
-          ))}
+            <span className="text-brand">{steps[step - 1]}</span>
+          </div>
+          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10 sm:hidden">
+            <div
+              className="h-full rounded-full bg-brand transition-all duration-300"
+              style={{ width: `${(step / steps.length) * 100}%` }}
+            />
+          </div>
+          <div className="hidden flex-wrap gap-2 text-[11px] uppercase tracking-[0.1em] text-white/40 sm:flex">
+            {steps.map((label, i) => (
+              <span key={label} className={`flex items-center gap-2 ${step >= i + 1 ? "text-brand" : ""}`}>
+                {i > 0 && <span className="text-white/20">—</span>}
+                {i + 1}. {label}
+              </span>
+            ))}
+          </div>
         </div>
 
-        {/* Step 1: Tiquets */}
-        {step === 1 && (
-          <div className="flex flex-col gap-5">
-            <Field label="Nom del convidat principal">
-              <input
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder="Nom i cognoms"
-                className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none focus:border-brand"
-              />
-            </Field>
-            <Field label="Quantitat de tiquets">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="h-9 w-9 rounded-full border border-white/15 text-lg"
-                >
-                  −
-                </button>
-                <span className="font-display text-lg font-bold">{quantity}</span>
-                <button
-                  onClick={() => setQuantity((q) => Math.min(event.spotsLeft, q + 1))}
-                  className="h-9 w-9 rounded-full border border-white/15 text-lg"
-                >
-                  +
-                </button>
-                <span className="ml-auto text-xs text-white/40">
-                  {event.spotsLeft} places disponibles
-                </span>
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+          {/* Step 1: Tiquets */}
+          {step === 1 && (
+            <div className="flex flex-col gap-5">
+              <Field label="Nom del convidat principal">
+                <input
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Nom i cognoms"
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none focus:border-brand"
+                />
+              </Field>
+              <Field label="Quantitat de tiquets">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                    className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-lg"
+                    aria-label="Menys tiquets"
+                  >
+                    −
+                  </button>
+                  <span className="font-display text-lg font-bold">{quantity}</span>
+                  <button
+                    onClick={() => setQuantity((q) => Math.min(event.spotsLeft, q + 1))}
+                    className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-lg"
+                    aria-label="Més tiquets"
+                  >
+                    +
+                  </button>
+                  <span className="ml-auto text-xs text-white/40">
+                    {event.spotsLeft} places disponibles
+                  </span>
+                </div>
+              </Field>
+            </div>
+          )}
+
+          {/* Step 2: Dietètica */}
+          {step === 2 && (
+            <Field label="Requeriments dietètics">
+              <div className="flex flex-col gap-2">
+                {DIETARY_OPTIONS.map((opt) => (
+                  <label
+                    key={opt}
+                    className={`flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                      dietary === opt
+                        ? "border-brand bg-brand/10"
+                        : "border-white/10 hover:border-white/25"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="dietary"
+                      className="accent-brand"
+                      checked={dietary === opt}
+                      onChange={() => setDietary(opt)}
+                    />
+                    {opt}
+                  </label>
+                ))}
               </div>
             </Field>
-          </div>
-        )}
+          )}
 
-        {/* Step 2: Dietètica */}
-        {step === 2 && (
-          <Field label="Requeriments dietètics">
-            <div className="flex flex-col gap-2">
-              {DIETARY_OPTIONS.map((opt) => (
-                <label
-                  key={opt}
-                  className={`flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm transition-colors ${
-                    dietary === opt
-                      ? "border-brand bg-brand/10"
-                      : "border-white/10 hover:border-white/25"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="dietary"
-                    className="accent-brand"
-                    checked={dietary === opt}
-                    onChange={() => setDietary(opt)}
-                  />
-                  {opt}
-                </label>
-              ))}
+          {/* Step 3: Contacte */}
+          {step === 3 && (
+            <div className="flex flex-col gap-5">
+              <Field label="Correu electrònic">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nom@exemple.com"
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none focus:border-brand"
+                />
+                <p className="text-xs text-white/35">Rebràs la confirmació de reserva per correu</p>
+              </Field>
+              <Field label="Telèfon (opcional)">
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+34 600 000 000"
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none focus:border-brand"
+                />
+              </Field>
             </div>
-          </Field>
-        )}
+          )}
 
-        {/* Step 3: Contacte */}
-        {step === 3 && (
-          <div className="flex flex-col gap-5">
-            <Field label="Correu electrònic">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nom@exemple.com"
-                className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none focus:border-brand"
-              />
-              <p className="text-xs text-white/35">Rebràs la confirmació de reserva per correu</p>
-            </Field>
-            <Field label="Telèfon (opcional)">
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+34 600 000 000"
-                className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none focus:border-brand"
-              />
-            </Field>
-          </div>
-        )}
-
-        {/* Step 4: Confirmació */}
-        {step === 4 && (
-          <div className="flex flex-col gap-4 rounded-xl border border-white/10 p-5 text-sm">
-            <SummaryRow label="Convidat" value={guestName || "—"} />
-            <SummaryRow label="Tiquets" value={String(quantity)} />
-            <SummaryRow label="Dietètica" value={dietary} />
-            <SummaryRow label="Correu" value={email} />
-            <SummaryRow label="Preu base" value={`${baseTotal.toFixed(2)} €`} />
-            <SummaryRow label="Despeses gestió" value={`${fee.toFixed(2)} €`} />
-            <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-4">
-              <span className="text-white/50">Total</span>
-              <span className="font-display text-xl font-bold">{total.toFixed(2)} €</span>
-            </div>
-            <p className="text-xs text-white/35">
-              Seràs redirigit a la plataforma de pagament segur de Stripe. 🔒
-            </p>
-            {error && (
-              <p className="rounded-lg bg-red-500/15 border border-red-500/30 px-4 py-3 text-xs text-red-400">
-                ⚠️ {error}
+          {/* Step 4: Confirmació */}
+          {step === 4 && (
+            <div className="flex flex-col gap-4 rounded-xl border border-white/10 p-5 text-sm">
+              <SummaryRow label="Convidat" value={guestName || "—"} />
+              <SummaryRow label="Tiquets" value={String(quantity)} />
+              <SummaryRow label="Dietètica" value={dietary} />
+              <SummaryRow label="Correu" value={email} />
+              <SummaryRow label="Preu base" value={`${baseTotal.toFixed(2)} €`} />
+              <SummaryRow label="Despeses gestió" value={`${fee.toFixed(2)} €`} />
+              <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-4">
+                <span className="text-white/50">Total</span>
+                <span className="font-display text-xl font-bold">{total.toFixed(2)} €</span>
+              </div>
+              <p className="text-xs text-white/35">
+                Seràs redirigit a la plataforma de pagament segur de Stripe. 🔒
               </p>
-            )}
-          </div>
-        )}
+              {error && (
+                <p className="rounded-lg bg-red-500/15 border border-red-500/30 px-4 py-3 text-xs text-red-400">
+                  ⚠️ {error}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Navigation buttons */}
-        <div className="mt-auto flex gap-3">
+        <div className="flex shrink-0 gap-3 border-t border-white/10 px-5 pt-5 pb-safe sm:px-8 sm:pt-8">
           {step > 1 && (
             <button
               onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3)}
@@ -244,7 +264,7 @@ export function BookingDrawer({
           </button>
         </div>
       </motion.div>
-    </AnimatePresence>
+    </Modal>
   );
 }
 

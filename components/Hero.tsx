@@ -11,7 +11,7 @@ const reveal = {
 
 export function Hero() {
   return (
-    <section className="relative min-h-[92vh] overflow-hidden px-6 pb-24 pt-16 md:px-10 md:pt-20">
+    <section className="relative min-h-[92svh] overflow-hidden px-6 pb-24 pt-16 md:px-10 md:pt-20">
       <motion.div
         initial="hidden"
         animate="show"
@@ -68,7 +68,7 @@ export function Hero() {
         >
           <div className="relative aspect-[16/11] w-full max-w-lg md:max-w-xl lg:max-w-2xl xl:max-w-[760px] -rotate-1 overflow-hidden rounded-3xl border border-white/10 bg-surface shadow-[0_0_80px_rgba(225,6,0,0.25)] transition-transform duration-500 hover:rotate-0">
             <Image
-              src="/data/players/Plantilla.png"
+              src="/data/players/plantilla-team.jpg"
               alt="Plantilla oficial del CF Juneda Temporada 26/27"
               fill
               sizes="(max-width: 768px) 95vw, (max-width: 1200px) 680px, 780px"
@@ -97,12 +97,14 @@ export function Hero() {
             </div>
           </div>
 
-          {/* Floating stat card */}
+          {/* Floating stat card — desktop only; on mobile this would sit on
+              top of the team photo, so it moves into a compact row below it
+              instead (see the mobile-only block right after this grid). */}
           <motion.div
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.6 }}
-            className="absolute -top-6 right-0 flex w-56 flex-col gap-2 rounded-2xl border border-white/10 bg-black/70 p-5 backdrop-blur-xl md:-right-6"
+            className="absolute -top-6 right-0 hidden w-56 flex-col gap-2 rounded-2xl border border-white/10 bg-black/70 p-5 backdrop-blur-xl md:-right-6 md:flex"
           >
             <span className="font-display text-xl font-black uppercase tracking-tight text-white">
               Segona Catalana
@@ -120,12 +122,12 @@ export function Hero() {
             </div>
           </motion.div>
 
-          {/* Floating social pill */}
+          {/* Floating social pill — desktop only, same reason as above */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.75, duration: 0.6 }}
-            className="absolute -bottom-6 -left-4 flex items-center gap-3 rounded-full border border-white/10 bg-black/70 py-2 pl-2 pr-5 backdrop-blur-xl md:-left-8"
+            className="absolute -bottom-6 -left-4 hidden items-center gap-3 rounded-full border border-white/10 bg-black/70 py-2 pl-2 pr-5 backdrop-blur-xl md:-left-8 md:flex"
           >
             <div className="flex -space-x-2">
               <span
@@ -143,6 +145,41 @@ export function Hero() {
               <span className="font-bold text-brand">Fes-te soci 2026/27</span>
             </span>
           </motion.div>
+        </motion.div>
+
+        {/* Mobile-only: same info as the two floating cards above, but
+            flowing below the photo instead of overlapping it */}
+        <motion.div
+          variants={reveal}
+          transition={{ duration: 0.6 }}
+          className="flex flex-col gap-3 md:hidden"
+        >
+          <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/50 px-4 py-3">
+            <div>
+              <span className="font-display text-sm font-black uppercase tracking-tight text-white">
+                Segona Catalana <span className="text-brand">· Grup 5</span>
+              </span>
+              <span className="mt-0.5 block text-[11px] text-white/50">
+                Diumenge · 17:00 h · Camp Municipal de Juneda
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-full border border-white/10 bg-black/50 py-2 pl-2 pr-5">
+            <div className="flex -space-x-2">
+              <span
+                className="h-7 w-7 shrink-0 rounded-full border-2 border-carbon"
+                style={{ background: "#1E3A8A" }}
+              />
+              <span
+                className="h-7 w-7 shrink-0 rounded-full border-2 border-carbon"
+                style={{ background: "#E10600" }}
+              />
+            </div>
+            <span className="text-[11px] font-medium leading-tight text-white/75">
+              Campanya de socis oberta ·{" "}
+              <span className="font-bold text-brand">Fes-te soci 2026/27</span>
+            </span>
+          </div>
         </motion.div>
       </motion.div>
     </section>
