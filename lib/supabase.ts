@@ -1,31 +1,32 @@
-﻿import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
-
-// A misconfigured or unreachable project (wrong URL, placeholder
-// credentials, a Supabase outage) should fail fast instead of hanging —
-// postgrest-js's own `db.timeout` bounds every request AND (unlike a
-// homemade AbortSignal on a custom `fetch`) is recognized internally as a
-// deliberate abort, so it skips postgrest-js's built-in retry-with-backoff
-// (3 retries by default on network errors) rather than tripping it 4x in a
-// row. `retry: false` on top is belt-and-suspenders for the same reason.
+// Un projecte mal configurat o inaccessible (URL erronia, credencials de
+// mostra, una caiguda de Supabase) ha de fallar rapid en comptes de quedar
+// penjat. El `db.timeout` de postgrest-js limita cada peticio I (a diferencia
+// d'un AbortSignal fet a ma sobre un `fetch` propi) es reconeix internament
+// com una cancel·lacio deliberada, aixi que no dispara el reintent amb
+// backoff que porta de serie (3 reintents per error de xarxa). El
+// `retry: false` de sobre es el mateix cinturo, per si de cas.
 const SUPABASE_TIMEOUT_MS = 5000;
-const dbOptions = { timeout: SUPABASE_TIMEOUT_MS, retry: false } as const;
 
-// Client-side client (limited permissions via Row Level Security)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  db: dbOptions,
-});
+// Client de servidor amb permisos totals. Nomes a rutes d'API.
+//
+// No hi ha cap client anonim: cap component del navegador parla amb Supabase
+// directament, tot passa per les rutes d'/api. Aixo vol dir que
+// NEXT_PUBLIC_SUPABASE_ANON_KEY no cal enlloc, i que aqui NO hi pot haver cap
+// recurs a la clau publica: si la clau de servei no hi es, degradar-se a la
+// clau anonima nomes produeix un "permission denied" incomprensible mig
+// desplegament enlla. Millor dir clarament que falta.
+export function getSupabaseAdmin(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
-// Server-side admin client (full permissions — use only in API routes)
-export function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-service-key";
+  if (!url) throw new Error("NEXT_PUBLIC_SUPABASE_URL no esta configurada");
+  if (!serviceKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY no esta configurada");
 
   return createClient(url, serviceKey, {
     auth: { persistSession: false },
-    db: dbOptions,
+    db: { timeout: SUPABASE_TIMEOUT_MS, retry: false },
   });
 }
 

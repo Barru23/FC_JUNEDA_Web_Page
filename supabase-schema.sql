@@ -176,6 +176,31 @@ VALUES
   ('1a-equipacio', '1a Equipació Vermella 2026/27', 'La samarreta oficial del primer equip per a la temporada 2026/27. Vermell amb detalls blaus i grocs.', 39.90, ARRAY['S','M','L','XL','NEN/A'], ARRAY['#E10600','#0A0A0B','#FBBF24'], true, 'active', '{"S": 10, "M": 15, "L": 12, "XL": 8, "NEN/A": 10}'::JSONB)
 ON CONFLICT (slug) DO NOTHING;
 
+-- ============================================================
+-- Permisos de taula (GRANT)
+-- ============================================================
+-- L'RLS decideix QUINES FILES veu cada rol, pero nomes despres que el rol
+-- tingui permis sobre la TAULA. Si el GRANT falta, PostgREST respon
+-- "permission denied for table ..." en lloc d'una llista buida. Segons com
+-- s'hagin creat les taules, els privilegis per defecte de Supabase poden no
+-- haver-se aplicat, aixi que els concedim explicitament aqui.
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+-- El servidor (service_role) ho gestiona tot i se salta l'RLS.
+GRANT ALL PRIVILEGES ON events, products, membership_tiers, purchases
+  TO service_role;
+
+-- Els catalegs publics son de nomes lectura per als rols del navegador;
+-- les policies de sota els limiten a les files actives.
+GRANT SELECT ON events, products, membership_tiers TO anon, authenticated;
+
+-- `purchases` conte dades personals i no s'exposa mai fora del servidor.
+REVOKE ALL PRIVILEGES ON purchases FROM anon, authenticated;
+
+-- Que les taules futures d'aquest schema neixin ja amb els permisos bons.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT ALL PRIVILEGES ON TABLES TO service_role;
+
 -- Row Level Security: public can read active events and products
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
