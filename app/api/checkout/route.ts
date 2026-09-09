@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getMembershipTier } from "@/lib/memberships";
@@ -259,6 +260,23 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
+    // Un 500 opac amaga la causa justament quan mes falta fa saber-la: una
+    // clau erronia, un compte de Stripe encara sense activar o un metode de
+    // pagament no habilitat es diagnostiquen tots amb el codi que retorna
+    // Stripe. El registrem sencer i n'exposem nomes el tipus i el codi, que no
+    // contenen ni claus ni dades del comprador.
+    if (err instanceof Stripe.errors.StripeError) {
+      console.error(`[Checkout] Stripe ${err.type} (${err.code ?? "sense codi"}): ${err.message}`);
+      return NextResponse.json(
+        {
+          error: "No s'ha pogut obrir la passarel·la de pagament",
+          stripe_type: err.type,
+          stripe_code: err.code ?? null,
+        },
+        { status: 502 },
+      );
+    }
+
     console.error("[Checkout] Error:", err);
     return NextResponse.json({ error: "Error intern del servidor al processar el pagament" }, { status: 500 });
   }
