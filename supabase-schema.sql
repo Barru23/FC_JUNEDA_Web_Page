@@ -129,7 +129,12 @@ BEGIN
 END;
 $$;
 
+-- Nomes el servidor pot descomptar places. Revoquem el permis per defecte i
+-- despres el concedim explicitament al service_role: si nomes el tingues via
+-- PUBLIC, el REVOKE l'hi trauria i la crida del webhook fallaria amb
+-- "permission denied for function decrement_spots".
 REVOKE ALL ON FUNCTION decrement_spots(UUID, INT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION decrement_spots(UUID, INT) TO service_role;
 
 -- Seed: Membership tiers (Campanya 2026/27 - Oficial image.png)
 INSERT INTO membership_tiers (slug, name, price_eur, season, benefits, status)
@@ -150,7 +155,13 @@ ON CONFLICT (slug) DO UPDATE SET
 -- checkout prices. Events created from /admin do not need a JSON entry.
 ALTER TABLE events ADD COLUMN IF NOT EXISTS slug TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS image_url TEXT;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_events_slug ON events(slug) WHERE slug IS NOT NULL;
+-- Index unic complet, no parcial: un `ON CONFLICT (slug)` no pot fer servir un
+-- index amb predicat (`WHERE slug IS NOT NULL`) si la instruccio no repeteix el
+-- mateix predicat, i fallava amb 42P10. El predicat tampoc calia: Postgres ja
+-- tracta els NULL com a diferents entre si, aixi que diversos esdeveniments
+-- sense slug hi segueixen cabent.
+DROP INDEX IF EXISTS idx_events_slug;
+CREATE UNIQUE INDEX idx_events_slug ON events(slug);
 
 -- Seed: Sample events (replace with real data) — kept in sync with the ids
 -- in content/events.json so existing rows don't get duplicated on sync.
