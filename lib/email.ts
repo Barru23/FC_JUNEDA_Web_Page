@@ -1,7 +1,20 @@
-﻿import { Resend } from "resend";
+import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL ?? "CF Juneda <onboarding@resend.dev>";
+
+// El client es crea sota demanda, no en carregar el mòdul: el constructor de
+// Resend llança si RESEND_API_KEY no hi és, i durant `next build` Next importa
+// les rutes per analitzar-les, de manera que un desplegament sense la clau
+// encara configurada tombava tot el build. Retornem null i els correus queden
+// desactivats fins que la variable existeixi, sense trencar la compra.
+function getResend(): Resend | null {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) {
+    console.warn("[Resend] RESEND_API_KEY no configurada — correu omès");
+    return null;
+  }
+  return new Resend(apiKey);
+}
 
 // ─── Email: Event Booking Confirmation ────────────────────────────────────────
 
@@ -24,6 +37,9 @@ export async function sendEventConfirmation({
   dietary?: string;
   total: number;
 }) {
+  const resend = getResend();
+  if (!resend) return null;
+
   const { data, error } = await resend.emails.send({
     from: FROM,
     to,
@@ -90,6 +106,9 @@ export async function sendMerchConfirmation({
   customization?: string;
   total: number;
 }) {
+  const resend = getResend();
+  if (!resend) return null;
+
   const { data, error } = await resend.emails.send({
     from: FROM,
     to,
@@ -143,6 +162,9 @@ export async function sendMembershipWelcome({
   season: string;
   total: number;
 }) {
+  const resend = getResend();
+  if (!resend) return null;
+
   const { data, error } = await resend.emails.send({
     from: FROM,
     to,
