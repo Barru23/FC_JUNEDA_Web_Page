@@ -33,6 +33,13 @@ var TOKEN = 'CANVIA_EM_PER_UNA_CONTRASENYA_LLARGA';
 // Adreça del club que apareix als correus com a contacte.
 var CONTACTE = 'joventjunedenc@gmail.com';
 
+// Escut del club per a la capçalera dels correus. S'adjunta al missatge (no
+// s'enllaça), perquè molts clients bloquegen les imatges remotes i el logo
+// quedaria com un quadre buit. La versió d'aquesta URL ja ve retallada a 220 px
+// i 13 KB; l'original fa 570 KB i no té sentit adjuntar-lo a cada correu.
+// Si canvieu el domini de la web, canvieu-lo també aquí.
+var LOGO_URL = 'https://cfjuneda.vercel.app/data/logo-email.png';
+
 // Les capçaleres depenen del tipus d'activitat. L'ordre mana: és el mateix
 // ordre en què construïm la fila a fila_().
 var CAPCALERES = {
@@ -207,20 +214,53 @@ function enviarCorreu_(tipus, d) {
     };
   }
 
+  var escut = escutBlob_();
+
   MailApp.sendEmail({
     to: d.to,
     subject: contingut.assumpte,
-    htmlBody: plantilla_(contingut, d.total),
+    htmlBody: plantilla_(contingut, d.total, !!escut),
     name: 'CF Juneda',
-    replyTo: CONTACTE
+    replyTo: CONTACTE,
+    inlineImages: escut ? { escut: escut } : {}
   });
+}
+
+/**
+ * L'escut, descarregat i guardat a la memòria cau sis hores perquè no calgui
+ * baixar-lo a cada correu. Retorna null si no s'ha pogut obtenir: un logo que
+ * falla no ha d'impedir que surti la confirmació, així que la plantilla torna
+ * al cercle vermell de sempre.
+ */
+function escutBlob_() {
+  try {
+    var cau = CacheService.getScriptCache();
+    var guardat = cau.get('escut');
+    if (guardat) {
+      return Utilities.newBlob(Utilities.base64Decode(guardat), 'image/png', 'escut.png');
+    }
+
+    var resposta = UrlFetchApp.fetch(LOGO_URL, { muteHttpExceptions: true });
+    if (resposta.getResponseCode() !== 200) {
+      console.warn('No s\'ha pogut baixar l\'escut: HTTP ' + resposta.getResponseCode());
+      return null;
+    }
+
+    var blob = resposta.getBlob().setName('escut.png');
+    // El límit per element de CacheService és 100 KB; l'escut en fa uns 13.
+    cau.put('escut', Utilities.base64Encode(blob.getBytes()), 21600);
+    return blob;
+  } catch (err) {
+    console.warn('Error obtenint l\'escut: ' + err);
+    return null;
+  }
 }
 
 /**
  * Mateixa identitat visual que la resta del club: fons fosc i vermell de marca.
  * Tot va amb estils en línia perquè els clients de correu ignoren els <style>.
  */
-function plantilla_(c, total) {
+function plantilla_(c, total, ambEscut) {
   var files = '';
   for (var i = 0; i < c.files.length; i++) {
     var etiqueta = c.files[i][0];
@@ -244,14 +284,23 @@ function plantilla_(c, total) {
       '</tr>';
   }
 
+  // L'escut es referencia per cid: apunta a l'adjunt inline, no a una URL, així
+  // que es veu encara que el client bloquegi les imatges remotes. width i height
+  // van com a atributs i no només com a estil perquè Outlook ignora el CSS de
+  // dimensions. Si no s'ha pogut adjuntar, es manté el cercle vermell d'abans.
+  var capcalera = ambEscut
+    ? '<img src="cid:escut" alt="Escut del Club Futbol Juneda" width="76" height="112" ' +
+        'style="display:block;margin:0 auto 4px;width:76px;height:112px;border:0;outline:none;">'
+    : '<div style="display:inline-block;background:#e10600;border-radius:50%;width:60px;height:60px;' +
+        'line-height:60px;font-size:28px;text-align:center;">⚽</div>';
+
   return '' +
 '<!DOCTYPE html><html lang="ca"><head><meta charset="UTF-8">' +
 '<meta name="viewport" content="width=device-width, initial-scale=1"></head>' +
 '<body style="font-family:Inter,Arial,sans-serif;background:#0a0a0b;color:#ffffff;margin:0;padding:0;">' +
   '<div style="max-width:560px;margin:0 auto;padding:40px 20px;">' +
     '<div style="text-align:center;margin-bottom:32px;">' +
-      '<div style="display:inline-block;background:#e10600;border-radius:50%;width:60px;height:60px;' +
-                  'line-height:60px;font-size:28px;text-align:center;">⚽</div>' +
+      capcalera +
       '<h1 style="color:#e10600;font-size:22px;margin:16px 0 4px;">Club Futbol Juneda</h1>' +
       '<p style="color:rgba(255,255,255,0.5);font-size:13px;margin:0;">Som-hi Rojos! 🔴 #AixòÉsJuneda</p>' +
     '</div>' +
