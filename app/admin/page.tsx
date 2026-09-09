@@ -657,6 +657,17 @@ export default function AdminDashboard() {
           <button onClick={fetchData} className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60 hover:text-white transition-colors">
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Actualitzar
           </button>
+          {sheetUrl && (
+            <a
+              href={sheetUrl}
+              target="_blank"
+              rel="noopener"
+              title="Obre el full de càlcul de la Junta al Google Drive"
+              className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-semibold text-green-400 hover:bg-green-500/20 transition-colors"
+            >
+              <ExternalLink size={13} /> Google Sheet
+            </a>
+          )}
           <a href="https://dashboard.stripe.com" target="_blank" rel="noopener" className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60 hover:text-white transition-colors">
             <ExternalLink size={13} /> Stripe
           </a>
@@ -750,7 +761,7 @@ export default function AdminDashboard() {
                         onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors"
                       >
-                        <ExternalLink size={11} /> Obrir Full de Calcul {tabName && `(${tabName})`}
+                        <ExternalLink size={11} /> Google Sheet {tabName && `(pestanya "${tabName}")`}
                       </a>
                     )}
                   </div>
@@ -827,9 +838,10 @@ export default function AdminDashboard() {
                 )}
                 <button
                   onClick={activeTab === "socis" ? exportSocisCSV : exportCSV}
+                  title="Descarrega un fitxer al teu ordinador per obrir-lo amb l'Excel"
                   className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60 hover:text-white transition-colors"
                 >
-                  <FileDown size={13} /> CSV
+                  <FileDown size={13} /> Baixar Excel
                 </button>
               </div>
             </div>

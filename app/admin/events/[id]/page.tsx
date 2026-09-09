@@ -140,16 +140,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               href={sheetUrl}
               target="_blank"
               rel="noopener"
+              title="Obre el full de calcul de la Junta al Google Drive"
               className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/20 transition-colors"
             >
-              <ExternalLink size={13} /> Google Sheet {tabName && `(${tabName})`}
+              <ExternalLink size={13} /> Google Sheet {tabName && `(pestanya "${tabName}")`}
             </a>
           )}
           <button
             onClick={exportCSV}
+            title="Descarrega un fitxer al teu ordinador per obrir-lo amb l'Excel"
             className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:text-white transition-colors"
           >
-            <FileDown size={13} /> Exportar CSV
+            <FileDown size={13} /> Baixar Excel
           </button>
         </div>
       </header>
