@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Crest } from "./Crest";
 import { Modal } from "@/components/ui/Modal";
+import { restoreScrollTo } from "@/lib/hooks/useScrollLock";
 
 const LINKS = [
   { href: "#botiga", label: "Botiga" },
@@ -15,6 +16,16 @@ const LINKS = [
 
 export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // No fem preventDefault: deixem que l'enllac posi el "#seccio" a la URL, que
+  // es el que dona una entrada d'historial i un enllac compartible. L'unic que
+  // cal es dir al bloqueig d'scroll on ha de deixar la pagina quan el menu es
+  // tanqui, perque mentre esta obert el navegador no pot desplacar-se sol.
+  function anarASeccio(href: string) {
+    const seccio = document.querySelector(href);
+    if (seccio) restoreScrollTo(seccio);
+    setMenuOpen(false);
+  }
 
   return (
     <header className="relative z-40 flex items-center justify-between px-6 py-5 md:px-10">
@@ -65,7 +76,7 @@ export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
                 <motion.a
                   key={link.href}
                   href={link.href}
-                  onClick={() => setMenuOpen(false)}
+                  onClick={() => anarASeccio(link.href)}
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05 * i, duration: 0.4 }}
