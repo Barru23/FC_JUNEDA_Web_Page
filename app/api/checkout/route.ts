@@ -14,6 +14,32 @@ function metadataValue(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, 500) : "";
 }
 
+// Stripe rebutja amb `url_invalid` qualsevol success_url que no sigui una URL
+// publica absoluta -- http://localhost inclos, en mode live. Enlloc de dependre
+// nomes de NEXT_PUBLIC_SITE_URL, que es facil d'oblidar en configurar Vercel,
+// caiem a les variables que Vercel injecta sol. La barra final es treu perque
+// despres hi concatenem "/success".
+function getSiteUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+
+  // Domini de produccio del projecte; en desplegaments de preview, el d'aquell
+  // desplegament concret. Vercel les dona sense esquema.
+  const vercelHost =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
+  if (vercelHost) return `https://${vercelHost.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`;
+
+  return "http://localhost:3000";
+}
+
+// Validacio deliberadament laxa: nomes descarta el que Stripe rebutjaria amb
+// `email_invalid`, per donar un missatge en catala al comprador en lloc d'un
+// error opac de passarel·la. Qui decideix si una adreca existeix es el correu
+// de confirmacio, no una expressio regular.
+function validEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(value);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -41,7 +67,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Falten camps obligatoris" }, { status: 400 });
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    if (!validEmail(email.trim())) {
+      return NextResponse.json(
+        { error: "L'adreça de correu no és vàlida" },
+        { status: 400 },
+      );
+    }
+
+    const siteUrl = getSiteUrl();
     let lineItems: {
       price_data: {
         currency: string;
