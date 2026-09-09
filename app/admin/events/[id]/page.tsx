@@ -8,6 +8,7 @@ import {
 import type { Purchase } from "@/lib/data";
 import { Crest } from "@/components/Crest";
 import { downloadCsv } from "@/lib/csv";
+import { getSheetUrl } from "@/lib/sheets-link";
 
 function getToken(): string {
   return sessionStorage.getItem("admin_token") ?? "";
@@ -72,11 +73,17 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     return p.dietary === dietaryFilter;
   });
 
-  const totalAttendees = purchases.reduce((acc, p) => acc + (p.quantity ?? 1), 0);
-  const totalRevenue = purchases.reduce((acc, p) => acc + (p.amount_eur ?? 0), 0);
+  // La llista de sota ensenya totes les compres, pendents incloses, perque la
+  // Junta les vol veure. Els totals, en canvi, nomes poden comptar les pagades:
+  // sumar-hi una compra pendent o fallida inflava la recaptacio i no quadrava
+  // amb la xifra del panell principal, que si que filtra per `completed`.
+  const compresPagades = purchases.filter((p) => p.payment_status === "completed");
+  const totalAttendees = compresPagades.reduce((acc, p) => acc + (p.quantity ?? 1), 0);
+  const totalRevenue = compresPagades.reduce((acc, p) => acc + (p.amount_eur ?? 0), 0);
+  const pendents = purchases.length - compresPagades.length;
 
-  const [sheetId, tabName] = (event?.sheet_id ?? "::").split("::");
-  const sheetUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}` : null;
+  const tabName = event?.sheet_id ?? event?.title;
+  const sheetUrl = getSheetUrl();
 
   function exportCSV() {
     if (!purchases.length) return;
@@ -159,6 +166,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-right">
                 <span className="block text-[10px] uppercase tracking-wider text-white/40">Recaptació</span>
                 <span className="font-display text-xl font-bold text-white">{totalRevenue.toFixed(2)} €</span>
+                <span className="block text-[10px] text-white/35">
+                  {pendents > 0 ? `${pendents} pendent${pendents === 1 ? "" : "s"} sense comptar` : "Només compres pagades"}
+                </span>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-right">
                 <span className="block text-[10px] uppercase tracking-wider text-white/40">Places Ocupades</span>

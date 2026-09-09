@@ -10,6 +10,7 @@ import {
 import type { DashboardStats, Purchase } from "@/lib/data";
 import type { DbSociRegistration } from "@/lib/supabase";
 import { formatIban } from "@/lib/identitat";
+import { getSheetUrl } from "@/lib/sheets-link";
 import { Crest } from "@/components/Crest";
 import { Modal } from "@/components/ui/Modal";
 import { downloadCsv } from "@/lib/csv";
@@ -555,7 +556,7 @@ export default function AdminDashboard() {
   const [productModalTarget, setProductModalTarget] = useState<AdminProduct | "new" | null>(null);
   const [showCash, setShowCash] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "event" | "merch" | "socis">("all");
-  const masterSheetId = process.env.NEXT_PUBLIC_MASTER_SHEET_ID ?? "";
+  const sheetUrl = getSheetUrl();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -705,8 +706,7 @@ export default function AdminDashboard() {
               )}
               {events.map((ev) => {
                 const pct = ev.total_spots ? Math.round(((ev.total_spots - ev.spots_remaining) / ev.total_spots) * 100) : 0;
-                const [sheetId, tabName] = (ev.sheet_id ?? "::").split("::");
-                const sheetUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}` : null;
+                const tabName = ev.sheet_id ?? ev.title;
 
                 return (
                   <div
