@@ -11,6 +11,7 @@ import { EventsSection } from "@/components/EventsSection";
 import { ShopSection } from "@/components/ShopSection";
 import { SocisSection } from "@/components/SocisSection";
 import { TacticalPitchRoster } from "@/components/roster/TacticalPitchRoster";
+import { Footer } from "@/components/Footer";
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -35,6 +36,7 @@ export default function Home() {
         <EventsSection />
         <SocisSection />
         <TacticalPitchRoster />
+        <Footer />
       </motion.main>
     </>
   );

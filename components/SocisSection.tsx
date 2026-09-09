@@ -12,12 +12,14 @@ import {
   Handshake,
   Check,
   Loader2,
-  Lock,
+  Landmark,
   Instagram,
   Sparkles,
   ArrowRight,
 } from "lucide-react";
 import type { MembershipTierEntry } from "@/lib/memberships";
+import { ConsentCheckbox, LegalLink } from "@/components/legal/ConsentCheckbox";
+import { validaDni, validaIban, formatIban } from "@/lib/identitat";
 
 const TIER_ICONS = {
   Users,
@@ -37,9 +39,13 @@ export function SocisSection() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [dni, setDni] = useState("");
+  const [iban, setIban] = useState("");
   const [notes, setNotes] = useState("");
+  const [acceptaMandat, setAcceptaMandat] = useState(false);
+  const [acceptaCondicions, setAcceptaCondicions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
   const isMobile = useIsMobile();
   const detailRef = useRef<HTMLDivElement>(null);
 
@@ -60,40 +66,50 @@ export function SocisSection() {
 
   const selectedTier = tiers.find((t) => t.slug === selectedSlug) ?? tiers[0];
 
+  // Validacio al navegador nomes per avisar abans d'enviar; qui mana es
+  // /api/socis, que ho torna a comprovar tot.
+  const dniValid = dni.trim() === "" || validaDni(dni);
+  const ibanValid = iban.trim() === "" || validaIban(iban);
+  const potEnviar =
+    !!selectedTier &&
+    !!name.trim() &&
+    !!email.trim() &&
+    !!phone.trim() &&
+    validaDni(dni) &&
+    validaIban(iban) &&
+    acceptaMandat &&
+    acceptaCondicions;
+
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedTier || !name.trim() || !email.trim()) {
-      setError("Si us plau, omple el teu nom i correu electrònic.");
-      return;
-    }
+    if (!potEnviar || !selectedTier) return;
 
     setSubmitting(true);
     setError(null);
 
     try {
-      const res = await fetch("/api/checkout", {
+      const res = await fetch("/api/socis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "membership",
-          tierId: selectedTier.slug,
-          guestName: name.trim(),
+          tierSlug: selectedTier.slug,
+          nom: name.trim(),
           email: email.trim(),
-          phone: phone.trim(),
-          customNumber: dni.trim() || undefined,
-          dietary: notes.trim() || undefined,
+          telefon: phone.trim(),
+          dni: dni.trim(),
+          iban: iban.trim(),
+          notes: notes.trim() || undefined,
+          acceptaMandat,
+          acceptaCondicions,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Error desconegut en tramitar la inscripció");
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error("No s'ha pogut iniciar la sessió de pagament");
-      }
+      if (!res.ok) throw new Error(data.error ?? "Error desconegut en tramitar l'alta");
+      setDone(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al processar el registre");
+    } finally {
       setSubmitting(false);
     }
   }
@@ -250,10 +266,11 @@ export function SocisSection() {
             </div>
 
             <div className="mt-2 rounded-2xl border border-white/10 bg-black/40 p-4">
-              <div className="flex items-center gap-2.5 text-xs text-white/60">
-                <Lock size={15} className="text-brand shrink-0" />
+              <div className="flex items-start gap-2.5 text-xs text-white/60">
+                <Landmark size={15} className="text-brand shrink-0 mt-0.5" />
                 <span>
-                  <strong>Pagament 100% protegit:</strong> Connexió xifrada d&apos;extrem a extrem gestionada per Stripe.
+                  <strong>No pagues res ara.</strong> L&apos;alta no comporta cap cobrament en
+                  aquest web: el club domicilia la quota anual al compte que ens indiquis.
                 </span>
               </div>
             </div>
@@ -267,12 +284,34 @@ export function SocisSection() {
             transition={{ duration: 0.4 }}
             className="lg:col-span-7 flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/[0.03] p-7 md:p-8 backdrop-blur-md"
           >
+            {done ? (
+              <div className="flex flex-col items-start gap-4 py-6">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full border border-brand/40 bg-brand/15 text-brand">
+                  <Check size={26} strokeWidth={3} />
+                </div>
+                <h4 className="font-display text-2xl font-black uppercase text-white">
+                  Alta rebuda, {name.split(" ")[0]}!
+                </h4>
+                <p className="text-sm leading-relaxed text-white/65">
+                  Ja constes com a <strong className="text-white">{selectedTier.name}</strong> per
+                  a la temporada {selectedTier.season}. La Junta revisarà les teves dades i
+                  domiciliarà la quota de {selectedTier.price_eur.toFixed(2)} € al compte que
+                  ens has indicat. Rebràs un correu de confirmació a {email}.
+                </p>
+                <p className="text-xs text-white/40">
+                  Si veus qualsevol dada incorrecta, escriu-nos i ho corregim abans
+                  d&apos;emetre el rebut.
+                </p>
+              </div>
+            ) : (
+            <>
             <div>
               <h4 className="font-display text-2xl font-black uppercase text-white">
                 Inscriu-te ara com a {selectedTier.name}
               </h4>
               <p className="text-xs text-white/50 mt-1">
-                Introdueix les teves dades per donar-te d&apos;alta per a la temporada 2026/27.
+                Deixa&apos;ns les teves dades per donar-te d&apos;alta per a la temporada{" "}
+                {selectedTier.season}. No es paga res per aquest web.
               </p>
             </div>
 
@@ -289,14 +328,23 @@ export function SocisSection() {
                   />
                 </FormField>
 
-                <FormField label="DNI / NIE (opcional per al carnet)">
+                <FormField label="DNI / NIE *">
                   <input
                     type="text"
+                    required
                     value={dni}
-                    onChange={(e) => setDni(e.target.value)}
+                    onChange={(e) => setDni(e.target.value.toUpperCase())}
                     placeholder="12345678X"
-                    className="w-full rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none transition-colors focus:border-brand"
+                    aria-invalid={!dniValid}
+                    className={`w-full rounded-xl border bg-black/50 px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none transition-colors focus:border-brand ${
+                      dniValid ? "border-white/10" : "border-red-500/60"
+                    }`}
                   />
+                  {!dniValid && (
+                    <span className="text-[11px] text-red-400">
+                      Revisa el DNI: 8 xifres i la lletra final.
+                    </span>
+                  )}
                 </FormField>
               </div>
 
@@ -312,9 +360,10 @@ export function SocisSection() {
                   />
                 </FormField>
 
-                <FormField label="Telèfon de contacte">
+                <FormField label="Telèfon de contacte *">
                   <input
                     type="tel"
+                    required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+34 600 000 000"
@@ -322,6 +371,32 @@ export function SocisSection() {
                   />
                 </FormField>
               </div>
+
+              <FormField label="IBAN del compte on domiciliar la quota *">
+                <input
+                  type="text"
+                  required
+                  inputMode="text"
+                  autoComplete="off"
+                  value={iban}
+                  onChange={(e) => setIban(e.target.value.toUpperCase())}
+                  onBlur={() => iban.trim() && setIban(formatIban(iban))}
+                  placeholder="ES91 2100 0418 4502 0005 1332"
+                  aria-invalid={!ibanValid}
+                  className={`w-full rounded-xl border bg-black/50 px-4 py-3 font-mono text-sm tracking-wide text-white placeholder:font-sans placeholder:tracking-normal placeholder:text-white/25 outline-none transition-colors focus:border-brand ${
+                    ibanValid ? "border-white/10" : "border-red-500/60"
+                  }`}
+                />
+                {!ibanValid ? (
+                  <span className="text-[11px] text-red-400">
+                    Aquest IBAN no és correcte. Copia&apos;l tal com surt a l&apos;app del teu banc.
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-white/35">
+                    24 caràcters que comencen per ES. El comprovem abans d&apos;enviar-lo.
+                  </span>
+                )}
+              </FormField>
 
               <FormField
                 label={
@@ -347,6 +422,31 @@ export function SocisSection() {
                 />
               </FormField>
 
+              <div className="mt-1 flex flex-col gap-2.5">
+                <ConsentCheckbox
+                  id="mandat-sepa"
+                  checked={acceptaMandat}
+                  onChange={setAcceptaMandat}
+                >
+                  Autoritzo el <strong>Club Futbol Juneda</strong> a enviar ordres a la meva
+                  entitat bancària per carregar al compte indicat la quota anual de{" "}
+                  <strong>{selectedTier.price_eur.toFixed(2)} €</strong> de la modalitat{" "}
+                  {selectedTier.name} (temporada {selectedTier.season}), i autoritzo el banc a
+                  fer-ho. Com a client bancari tinc dret al reemborsament segons el contracte
+                  amb el meu banc, i el puc sol·licitar en les 8 setmanes següents al càrrec.
+                </ConsentCheckbox>
+
+                <ConsentCheckbox
+                  id="condicions-soci"
+                  checked={acceptaCondicions}
+                  onChange={setAcceptaCondicions}
+                >
+                  He llegit i accepto les{" "}
+                  <LegalLink href="/condicions-compra">condicions de compra</LegalLink> i la{" "}
+                  <LegalLink href="/privacitat">política de privacitat</LegalLink>.
+                </ConsentCheckbox>
+              </div>
+
               {error && (
                 <div className="rounded-xl border border-red-500/30 bg-red-500/15 p-4 text-xs text-red-300">
                   ⚠️ {error}
@@ -355,26 +455,29 @@ export function SocisSection() {
 
               <button
                 type="submit"
-                disabled={submitting || !name.trim() || !email.trim()}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-brand py-4 font-display text-sm font-black uppercase tracking-widest text-white transition-all hover:scale-[1.01] hover:shadow-[0_0_30px_rgba(225,6,0,0.6)] disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={submitting || !potEnviar}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-brand py-4 font-display text-sm font-black uppercase tracking-widest text-white transition-all hover:scale-[1.01] hover:shadow-[0_0_30px_rgba(225,6,0,0.6)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {submitting ? (
                   <>
                     <Loader2 size={18} className="animate-spin" />
-                    Processant registre...
+                    Tramitant l&apos;alta...
                   </>
                 ) : (
                   <>
-                    Confirmar i fer-me soci ({selectedTier.price_eur.toFixed(0)}€)
+                    Enviar la meva alta de soci
                     <ArrowRight size={16} />
                   </>
                 )}
               </button>
 
               <p className="text-center text-[11px] text-white/40">
-                En fer clic a &quot;Confirmar i fer-me soci&quot; seràs redirigit a Stripe per completar el pagament segur.
+                No es fa cap cobrament ara. El club domiciliarà la quota de{" "}
+                {selectedTier.price_eur.toFixed(2)} € al compte que has indicat.
               </p>
             </form>
+            </>
+            )}
 
             {/* Offline & Instagram info box from image.png */}
             <div className="mt-2 rounded-2xl border border-white/10 bg-black/40 p-4">

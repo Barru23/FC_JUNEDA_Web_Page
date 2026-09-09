@@ -6,6 +6,7 @@ import { X, Loader2 } from "lucide-react";
 import type { ClubEvent } from "@/lib/data";
 import { Modal } from "@/components/ui/Modal";
 import { serviceFeeEur } from "@/lib/fees";
+import { ConsentCheckbox, LegalLink } from "@/components/legal/ConsentCheckbox";
 
 const DIETARY_OPTIONS = [
   "Cap intolerancia",
@@ -30,9 +31,17 @@ export function BookingDrawer({
   const [dietary, setDietary] = useState(DIETARY_OPTIONS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [acceptaCondicions, setAcceptaCondicions] = useState(false);
+  const [acceptaDietetica, setAcceptaDietetica] = useState(false);
 
   // Nomes per mostrar-lo: el servidor el torna a calcular amb el preu de
   // Supabase, aixi que aquest numero no pot alterar el que es cobra.
+  // Nomes les opcions diferents de la primera poden revelar una condicio de
+  // salut (celiaquia, intolerancia). "Cap intolerancia" no diu res de ningu i
+  // no ha de demanar cap consentiment addicional.
+  const dieteticaSensible = dietary !== DIETARY_OPTIONS[0];
+  const potPagar = acceptaCondicions && (!dieteticaSensible || acceptaDietetica);
+
   const baseTotal = quantity * event.price;
   const fee = serviceFeeEur(baseTotal);
   const total = baseTotal + fee;
@@ -227,6 +236,31 @@ export function BookingDrawer({
                 <span className="text-white/50">Total</span>
                 <span className="font-display text-xl font-bold">{total.toFixed(2)} €</span>
               </div>
+              <div className="mt-1 flex flex-col gap-2.5">
+                <ConsentCheckbox
+                  id="condicions-event"
+                  checked={acceptaCondicions}
+                  onChange={setAcceptaCondicions}
+                >
+                  He llegit i accepto les{" "}
+                  <LegalLink href="/condicions-compra">condicions de compra</LegalLink> i la{" "}
+                  <LegalLink href="/privacitat">política de privacitat</LegalLink>. Entenc que
+                  els tiquets d&apos;un acte amb data concreta no tenen dret de desistiment.
+                </ConsentCheckbox>
+
+                {dieteticaSensible && (
+                  <ConsentCheckbox
+                    id="dietetica-event"
+                    checked={acceptaDietetica}
+                    onChange={setAcceptaDietetica}
+                  >
+                    Consenteixo que el club tracti el requeriment dietètic que he indicat
+                    (&laquo;{dietary}&raquo;) amb l&apos;única finalitat de preparar el menú.
+                    Pot revelar informació sobre la meva salut.
+                  </ConsentCheckbox>
+                )}
+              </div>
+
               <p className="text-xs text-white/35">
                 Seràs redirigit a la plataforma de pagament segur de Stripe. 🔒
               </p>
@@ -255,7 +289,8 @@ export function BookingDrawer({
             disabled={
               loading ||
               (step === 1 && !guestName) ||
-              (step === 3 && !email)
+              (step === 3 && !email) ||
+              (step === 4 && !potPagar)
             }
             className="flex-1 rounded-lg bg-brand py-3 text-sm font-semibold uppercase tracking-wide text-white disabled:opacity-40 flex items-center justify-center gap-2"
           >

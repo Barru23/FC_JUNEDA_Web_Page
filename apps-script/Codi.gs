@@ -38,7 +38,9 @@ var CONTACTE = 'joventjunedenc@gmail.com';
 var CAPCALERES = {
   event: ['Nom', 'Email', 'Telèfon', 'Tiquets', 'Convidats', 'Dietètica', 'Preu (€)', 'Mètode', 'Estat', 'Data'],
   merch: ['Nom', 'Email', 'Telèfon', 'Producte', 'Talla', 'Personalització', 'Preu (€)', 'Mètode', 'Estat', 'Data'],
-  membership: ['Nom', 'Email', 'Telèfon', 'Tipus Soci', 'Temporada', 'Preu (€)', 'Mètode', 'Estat', 'Data']
+  membership: ['Nom', 'Email', 'Telèfon', 'Tipus Soci', 'Temporada', 'Preu (€)', 'Mètode', 'Estat', 'Data'],
+  // Altes de soci: no hi ha cobrament, hi ha dades per domiciliar.
+  soci: ['Nom i cognoms', 'DNI/NIE', 'Email', 'Telèfon', 'IBAN', 'Modalitat', 'Temporada', 'Quota (€)', 'Observacions', 'Estat', "Data d'alta"]
 };
 
 function doPost(e) {
@@ -104,17 +106,27 @@ function afegirFila_(nomFull, tipus, row) {
   var nom = netejarNomFull_(nomFull || 'Registres');
   var full = llibre.getSheetByName(nom);
 
+  var capcaleres = CAPCALERES[tipus] || CAPCALERES.event;
+
   if (!full) {
     full = llibre.insertSheet(nom);
-    var capcaleres = CAPCALERES[tipus];
-    full.getRange(1, 1, 1, capcaleres.length).setValues([capcaleres]);
-    full.getRange(1, 1, 1, capcaleres.length).setFontWeight('bold');
-    full.setFrozenRows(1);
-    full.autoResizeColumns(1, capcaleres.length);
+    escriureCapcaleres_(full, capcaleres);
+  } else if (full.getLastRow() === 0) {
+    // La pestanya existeix pero esta buida: probablement algu la va crear a ma.
+    // Sense capçaleres, les dades hi cauen sense cap titol a sobre.
+    escriureCapcaleres_(full, capcaleres);
   }
 
   full.appendRow(fila_(tipus, row));
   return full.getLastRow();
+}
+
+/** Fila de capçaleres en negreta, congelada i amb les columnes ajustades. */
+function escriureCapcaleres_(full, capcaleres) {
+  full.getRange(1, 1, 1, capcaleres.length).setValues([capcaleres]);
+  full.getRange(1, 1, 1, capcaleres.length).setFontWeight('bold');
+  full.setFrozenRows(1);
+  full.autoResizeColumns(1, capcaleres.length);
 }
 
 /**
@@ -131,6 +143,9 @@ function fila_(tipus, r) {
   }
   if (tipus === 'merch') {
     return [r.nom, r.email, r.telefon, r.producte, r.talla, r.personalitzacio, r.preu, r.metode, r.estat, r.data];
+  }
+  if (tipus === 'soci') {
+    return [r.nom, r.dni, r.email, r.telefon, r.iban, r.tipusSoci, r.temporada, r.preu, r.observacions, r.estat, r.data];
   }
   return [r.nom, r.email, r.telefon, r.tipusSoci, r.temporada, r.preu, r.metode, r.estat, r.data];
 }
@@ -165,6 +180,19 @@ function enviarCorreu_(tipus, d) {
         ['Personalització', d.customization]
       ],
       peu: 'Et notificarem quan la teva comanda estigui llesta per recollir.'
+    };
+  } else if (tipus === 'soci') {
+    contingut = {
+      assumpte: '🔴 Alta de soci rebuda — CF Juneda',
+      titol: 'Alta rebuda, ' + d.buyerName + '! 🎉',
+      intro: 'Hem registrat la teva alta com a soci/sòcia del Club Futbol Juneda. '
+        + "No s'ha fet cap cobrament: la Junta domiciliara la quota al compte que ens has indicat.",
+      files: [
+        ['Modalitat', d.tierName],
+        ['Temporada', d.season],
+        ['Quota anual a domiciliar', d.quotaAnual != null ? d.quotaAnual.toFixed(2) + ' €' : null]
+      ],
+      peu: "Si alguna dada no es correcta, respon aquest correu i ho corregim abans d'emetre el rebut."
     };
   } else {
     contingut = {

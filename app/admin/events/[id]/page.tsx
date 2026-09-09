@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { Purchase } from "@/lib/data";
 import { Crest } from "@/components/Crest";
+import { downloadCsv } from "@/lib/csv";
 
 function getToken(): string {
   return sessionStorage.getItem("admin_token") ?? "";
@@ -79,7 +80,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   function exportCSV() {
     if (!purchases.length) return;
-    const headers = ["Nom", "Email", "Telèfon", "Tiquets", "Dietètica", "Import (€)", "Mètode", "Estat", "Data"];
+    const headers = ["Nom", "Email", "Telèfon", "Tiquets", "Dietètica", "Import (€)", "Gestió (€)", "Mètode", "Estat", "Data"];
     const rows = purchases.map((p) => [
       p.buyer_name,
       p.buyer_email,
@@ -87,17 +88,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       p.quantity ?? 1,
       p.dietary ?? "Cap",
       p.amount_eur,
-      p.payment_method ?? "",
-      p.payment_status,
+      p.fee_eur ?? 0,
+      p.payment_method === "cash" ? "Efectiu" : "Targeta (Stripe)",
+      p.payment_status === "completed" ? "Pagat" : p.payment_status,
       new Date(p.created_at).toLocaleDateString("ca-ES"),
     ]);
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${event?.title.replace(/\s+/g, "_") || "assistents"}.csv`;
-    a.click();
+    downloadCsv(`${event?.title.replace(/\s+/g, "_") || "assistents"}.csv`, headers, rows);
   }
 
   if (loading && !event) {

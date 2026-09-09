@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Menu, X, ArrowRight } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Crest } from "./Crest";
 import { Modal } from "@/components/ui/Modal";
@@ -37,15 +37,6 @@ export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
       >
         <Crest className="h-full w-full drop-shadow-[0_0_16px_rgba(225,6,0,0.5)]" />
       </motion.div>
-
-      <a
-        href="#botiga"
-        className="group flex items-center gap-2 rounded-full border border-brand/40 bg-black/30 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-white backdrop-blur-sm transition-colors hover:border-brand"
-      >
-        Compra tiquets
-        <span className="hidden sm:inline">/ Botiga</span>
-        <ArrowRight size={13} className="text-brand transition-transform group-hover:translate-x-0.5" />
-      </a>
 
       <AnimatePresence>
         {menuOpen && (
@@ -83,14 +74,6 @@ export function Nav({ crestRevealed }: { crestRevealed: boolean }) {
                   {link.label}
                 </motion.a>
               ))}
-              <div className="mt-8 border-t border-white/10 pt-4 w-full">
-                <a
-                  href="/admin"
-                  className="text-xs font-semibold uppercase tracking-widest text-white/40 hover:text-brand transition-colors"
-                >
-                  Panell d&apos;administració →
-                </a>
-              </div>
             </nav>
           </motion.div>
           </Modal>

@@ -6,6 +6,7 @@ import { SectionHeading } from "./EventsSection";
 import { KitViewer2D } from "./KitViewer2D";
 import { Modal } from "@/components/ui/Modal";
 import { serviceFeeEur } from "@/lib/fees";
+import { ConsentCheckbox, LegalLink } from "@/components/legal/ConsentCheckbox";
 import { Loader2, ShoppingBag, X } from "lucide-react";
 
 type ViewType = "front" | "back";
@@ -40,6 +41,7 @@ export function ShopSection() {
   const [buyerPhone, setBuyerPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [acceptaCondicions, setAcceptaCondicions] = useState(false);
 
   // Supabase is the only merchandise catalogue and price source. Refresh on
   // focus as well, so an admin change is reflected without a deployment.
@@ -403,6 +405,19 @@ export function ShopSection() {
                   />
                 </div>
 
+                <ConsentCheckbox
+                  id="condicions-botiga"
+                  checked={acceptaCondicions}
+                  onChange={setAcceptaCondicions}
+                >
+                  He llegit i accepto les{" "}
+                  <LegalLink href="/condicions-compra">condicions de compra</LegalLink> i la{" "}
+                  <LegalLink href="/privacitat">política de privacitat</LegalLink>.
+                  {customize && (
+                    <> Entenc que una peça personalitzada no admet devolució.</>
+                  )}
+                </ConsentCheckbox>
+
                 {error && (
                   <div className="rounded-lg bg-red-500/15 border border-red-500/30 px-3.5 py-2 text-xs text-red-400">
                     ⚠️ {error}
@@ -419,7 +434,7 @@ export function ShopSection() {
                   </button>
                   <button
                     type="submit"
-                    disabled={loading || !buyerName || !buyerEmail || (customize && !number.trim()) || selectedSizeOutOfStock}
+                    disabled={loading || !buyerName || !buyerEmail || (customize && !number.trim()) || selectedSizeOutOfStock || !acceptaCondicions}
                     className="flex-1 rounded-xl bg-brand py-3 text-xs font-extrabold uppercase tracking-widest text-white transition-all hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2"
                   >
                     {loading ? (

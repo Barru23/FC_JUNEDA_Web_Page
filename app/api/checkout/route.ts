@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getMembershipTier } from "@/lib/memberships";
 import { serviceFeeCents } from "@/lib/fees";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -19,13 +18,18 @@ function metadataValue(value: unknown): string {
 // de Stripe tambe es una per transaccio. Va com a line item propi perque el
 // comprador la vegi desglossada dins de la propia pagina de Stripe, no nomes al
 // resum d'abans de pagar.
+//
+// El text no ha de lligar-la al mitja de pagament: el RDL 19/2018 (PSD2)
+// prohibeix recarregar al consumidor l'us de targeta o Bizum. El que es cobra
+// es la gestio de la compra en linia, que s'aplica igual amb qualsevol mitja
+// -- que es com ho descriuen tambe les condicions de compra.
 function feeLineItem(feeCents: number) {
   return {
     price_data: {
       currency: "eur",
       product_data: {
         name: "Despeses de gestió",
-        description: "Comissió de la passarel·la de pagament en línia",
+        description: "Gestió de la compra en línia",
       },
       unit_amount: feeCents,
     },
@@ -66,7 +70,6 @@ export async function POST(req: NextRequest) {
       type,
       eventId,
       productId,
-      tierId,
       quantity,
       guestName,
       dietary,
@@ -77,7 +80,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (
-      !["event", "merch", "membership"].includes(type) ||
+      !["event", "merch"].includes(type) ||
       typeof email !== "string" ||
       !email.trim() ||
       typeof guestName !== "string" ||
@@ -243,64 +246,6 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // Memberships keep their existing catalogue fallback, while preferring DB.
-    else if (type === "membership") {
-      const tierSlug = tierId ?? "soci-general";
-      const catalogueTier = getMembershipTier(tierSlug);
-
-      let tierName = catalogueTier?.name ?? "Soci General";
-      let tierPrice = catalogueTier?.price_eur ?? 110;
-      let season = catalogueTier?.season ?? "2026/27";
-      let tierDbId: string | undefined;
-
-      try {
-        const supabase = getSupabaseAdmin();
-        const { data: tier } = await supabase
-          .from("membership_tiers")
-          .select("*")
-          .eq("slug", tierSlug)
-          .single();
-        if (tier) {
-          tierName = tier.name;
-          tierPrice = Number(tier.price_eur);
-          season = tier.season;
-          tierDbId = tier.id;
-        }
-      } catch (err) {
-        console.warn("[Checkout] Supabase query fallback for tier:", err);
-      }
-
-      if (!validPrice(tierPrice)) {
-        return NextResponse.json({ error: "El preu de la quota no és vàlid" }, { status: 409 });
-      }
-
-      // Les quotes de soci no porten despeses de gestio: la comissio de Stripe
-      // la continua assumint el club.
-      netCents = Math.round(tierPrice * 100);
-      feeCents = 0;
-
-      lineItems = [
-        {
-          price_data: {
-            currency: "eur",
-            product_data: {
-              name: `${tierName} — Temporada ${season}`,
-              description: "Quota de soci Club Futbol Juneda",
-            },
-            unit_amount: netCents,
-          },
-          quantity: 1,
-        },
-      ];
-
-      metadata = {
-        ...metadata,
-        tier_id: tierDbId ?? "",
-        tier_slug: tierSlug,
-        purchase_type: "membership",
-      };
-    }
-
     metadata = {
       ...metadata,
       net_eur: (netCents / 100).toFixed(2),
@@ -315,7 +260,7 @@ export async function POST(req: NextRequest) {
       // activats al dashboard (targeta, Bizum, Apple Pay, Google Pay) segons
       // el dispositiu del comprador. Declarar-los aquí els sobreescriuria.
       success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/#${type === "event" ? "esdeveniments" : type === "merch" ? "botiga" : "socis"}`,
+      cancel_url: `${siteUrl}/#${type === "event" ? "esdeveniments" : "botiga"}`,
       metadata,
       locale: "auto",
     });

@@ -108,6 +108,30 @@ export type DbPurchase = {
   tier?: Pick<DbMembershipTier, "name" | "price_eur">;
 };
 
+/**
+ * Alta de soci sense pagament en linia. Conte DNI i IBAN: no ha de sortir mai
+ * del servidor ni arribar a cap resposta publica.
+ */
+export type DbSociRegistration = {
+  id: string;
+  nom: string;
+  dni: string;
+  email: string;
+  telefon: string;
+  iban: string;
+  tier_id: string | null;
+  tier_slug: string;
+  tier_name: string | null;
+  price_eur: number | null;
+  season: string | null;
+  notes: string | null;
+  mandate_accepted_at: string | null;
+  terms_version: string | null;
+  status: "pending" | "active" | "cancelled";
+  sheet_synced: boolean;
+  created_at: string;
+};
+
 export type DashboardStats = {
   total_revenue: number;
   event_revenue: number;

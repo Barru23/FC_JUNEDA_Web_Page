@@ -77,6 +77,41 @@ CREATE TABLE IF NOT EXISTS purchases (
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Inscripcions de soci
+-- Els socis NO paguen per la web: omplen el formulari i la Junta fa la
+-- domiciliacio a ma. Per aixo aquesta taula viu a part de `purchases`, que
+-- nomes recull cobraments fets. Conte dades bancaries i identificatives i no
+-- ha de sortir mai del servidor.
+CREATE TABLE IF NOT EXISTS soci_registrations (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nom                 TEXT NOT NULL,
+  dni                 TEXT NOT NULL,
+  email               TEXT NOT NULL,
+  telefon             TEXT NOT NULL,
+  iban                TEXT NOT NULL,
+  tier_id             UUID REFERENCES membership_tiers(id),
+  tier_slug           TEXT NOT NULL,
+  tier_name           TEXT,
+  price_eur           DECIMAL(8,2),
+  season              TEXT,
+  notes               TEXT,
+  -- Prova documental del mandat SEPA i del consentiment RGPD: sense la data i
+  -- la versio del text acceptat no es pot demostrar que el soci va autoritzar
+  -- la domiciliacio, que es el que empara el cobrament davant del banc.
+  mandate_accepted_at TIMESTAMPTZ,
+  terms_version       TEXT,
+  status              TEXT DEFAULT 'pending',
+  sheet_synced        BOOLEAN DEFAULT false,
+  created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Una alta per persona i temporada. Si algu envia el formulari dues vegades,
+-- la segona xoca aqui en lloc de generar una remesa duplicada.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_soci_dni_season
+  ON soci_registrations (upper(replace(dni, ' ', '')), season);
+CREATE INDEX IF NOT EXISTS idx_soci_created ON soci_registrations (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_soci_status  ON soci_registrations (status);
+
 -- ============================================================
 -- Migration: stable slug identifiers
 -- The app addresses products and tiers by a human-readable slug, never by
@@ -189,7 +224,7 @@ ON CONFLICT (slug) DO NOTHING;
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 
 -- El servidor (service_role) ho gestiona tot i se salta l'RLS.
-GRANT ALL PRIVILEGES ON events, products, membership_tiers, purchases
+GRANT ALL PRIVILEGES ON events, products, membership_tiers, purchases, soci_registrations
   TO service_role;
 
 -- Els catalegs publics son de nomes lectura per als rols del navegador;
@@ -198,6 +233,9 @@ GRANT SELECT ON events, products, membership_tiers TO anon, authenticated;
 
 -- `purchases` conte dades personals i no s'exposa mai fora del servidor.
 REVOKE ALL PRIVILEGES ON purchases FROM anon, authenticated;
+
+-- `soci_registrations` conte DNI i IBAN: encara mes motiu per no exposar-la.
+REVOKE ALL PRIVILEGES ON soci_registrations FROM anon, authenticated;
 
 -- Que les taules futures d'aquest schema neixin ja amb els permisos bons.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
@@ -208,6 +246,7 @@ ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE purchases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE membership_tiers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE soci_registrations ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Public can read active events" ON events;
 DROP POLICY IF EXISTS "Public can read active products" ON products;
@@ -223,3 +262,6 @@ CREATE POLICY "Public can read active tiers" ON membership_tiers FOR SELECT USIN
 -- navegador). Una policy `USING (true)` sense `TO service_role` s'aplicaria al
 -- rol públic i exposaria tota la taula.
 DROP POLICY IF EXISTS "Public read purchases" ON purchases;
+-- Mateix criteri per a `soci_registrations`, que a mes hi afegeix DNI i IBAN:
+-- RLS activat i cap policy, de manera que nomes el service_role hi arriba.
+DROP POLICY IF EXISTS "Public read soci_registrations" ON soci_registrations;

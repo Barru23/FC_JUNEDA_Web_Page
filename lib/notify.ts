@@ -6,7 +6,7 @@
 // més evita haver de verificar un domini propi per poder escriure a
 // destinataris que no siguin nosaltres mateixos.
 
-export type NotifyType = "event" | "merch" | "membership";
+export type NotifyType = "event" | "merch" | "membership" | "soci";
 
 export type NotifyRow = {
   nom: string;
@@ -20,6 +20,10 @@ export type NotifyRow = {
   personalitzacio?: string | null;
   tipusSoci?: string | null;
   temporada?: string | null;
+  // Alta de soci: dades per a la domiciliacio que fa la Junta a ma.
+  dni?: string | null;
+  iban?: string | null;
+  observacions?: string | null;
   preu: number;
   metode: string;
   estat: string;
@@ -40,6 +44,8 @@ export type NotifyEmail = {
   customization?: string;
   tierName?: string;
   season?: string;
+  /** Alta de soci: quota anual que es domiciliara, encara no cobrada. */
+  quotaAnual?: number;
 };
 
 export type NotifyResult = {

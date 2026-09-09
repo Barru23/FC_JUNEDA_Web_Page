@@ -5,11 +5,20 @@ import { useRouter } from "next/navigation";
 import {
   Ticket, ShoppingBag, Users, Plus, ExternalLink,
   RefreshCw, FileDown, Calendar, Loader2, CheckCircle, Clock,
-  Euro, ChevronRight, X, Pencil, PackageCheck
+  Euro, ChevronRight, X, Pencil, PackageCheck, Landmark, Copy
 } from "lucide-react";
 import type { DashboardStats, Purchase } from "@/lib/data";
+import type { DbSociRegistration } from "@/lib/supabase";
+import { formatIban } from "@/lib/identitat";
 import { Crest } from "@/components/Crest";
 import { Modal } from "@/components/ui/Modal";
+import { downloadCsv } from "@/lib/csv";
+
+const TYPE_LABELS: Record<string, string> = {
+  event: "Tiquet d'esdeveniment",
+  merch: "Botiga",
+  membership: "Quota de soci",
+};
 
 function getToken(): string {
   return sessionStorage.getItem("admin_token") ?? "";
@@ -71,6 +80,77 @@ function PurchaseRow({ p }: { p: Purchase }) {
             <span className="ml-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-white/50">💵</span>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Soci Row ─────────────────────────────────────────────────────────────────
+// Ensenya l'IBAN sencer a proposit: es exactament el que la Junta ha de copiar
+// per muntar la remesa al banc, i amagar-lo obligaria a exportar el CSV per a
+// una sola alta.
+function SociRow({ s, onStatus }: { s: DbSociRegistration; onStatus: (id: string, status: string) => void }) {
+  const estat = {
+    pending: { text: "Pendent de domiciliar", cls: "text-yellow-400", Icon: Clock },
+    active: { text: "Domiciliat", cls: "text-green-400", Icon: CheckCircle },
+    cancelled: { text: "Anul·lat", cls: "text-white/40", Icon: X },
+  }[s.status] ?? { text: s.status, cls: "text-white/40", Icon: Clock };
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-xl border border-white/5 bg-white/[0.02] p-3.5 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-white truncate">{s.nom}</p>
+          <p className="text-xs text-yellow-400/80 truncate">
+            {s.tier_name ?? s.tier_slug} · {s.season}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-bold text-white">
+            {s.price_eur != null ? `${Number(s.price_eur).toFixed(2)} €` : "—"}
+          </p>
+          <div className={`flex items-center justify-end gap-1 text-xs ${estat.cls}`}>
+            <estat.Icon size={10} /> {estat.text}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-1 text-[11px] text-white/50 sm:grid-cols-2">
+        <span className="truncate">{s.email}</span>
+        <span>{s.telefon}</span>
+        <span>DNI: <span className="text-white/75">{s.dni}</span></span>
+        <span className="flex items-center gap-1.5">
+          IBAN:{" "}
+          <span className="font-mono text-white/75">{formatIban(s.iban)}</span>
+          <button
+            onClick={() => navigator.clipboard?.writeText(s.iban)}
+            title="Copiar l'IBAN"
+            className="text-white/40 transition-colors hover:text-brand"
+          >
+            <Copy size={11} />
+          </button>
+        </span>
+      </div>
+
+      {s.notes && <p className="text-[11px] text-white/40">Obs.: {s.notes}</p>}
+
+      <div className="flex gap-2 pt-0.5">
+        {s.status !== "active" && (
+          <button
+            onClick={() => onStatus(s.id, "active")}
+            className="rounded-lg border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-[11px] font-semibold text-green-400 transition-colors hover:bg-green-500/20"
+          >
+            Marcar com a domiciliat
+          </button>
+        )}
+        {s.status !== "cancelled" && (
+          <button
+            onClick={() => onStatus(s.id, "cancelled")}
+            className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-white/50 transition-colors hover:text-white"
+          >
+            Anul·lar
+          </button>
+        )}
       </div>
     </div>
   );
@@ -469,27 +549,33 @@ export default function AdminDashboard() {
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [socis, setSocis] = useState<DbSociRegistration[]>([]);
   const [loading, setLoading] = useState(true);
   const [eventModalTarget, setEventModalTarget] = useState<AdminEvent | "new" | null>(null);
   const [productModalTarget, setProductModalTarget] = useState<AdminProduct | "new" | null>(null);
   const [showCash, setShowCash] = useState(false);
-  const [activeTab, setActiveTab] = useState<"all" | "event" | "merch" | "membership">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "event" | "merch" | "socis">("all");
   const masterSheetId = process.env.NEXT_PUBLIC_MASTER_SHEET_ID ?? "";
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     const h = authHeaders();
     try {
-      const [statsRes, eventsRes, productsRes, purchasesRes] = await Promise.all([
+      // La pestanya de socis no llegeix `purchases`: una alta de soci no es un
+      // cobrament, viu a `soci_registrations` i te la seva propia ruta.
+      const purchaseFilter = activeTab === "all" || activeTab === "socis" ? "" : `?type=${activeTab}`;
+      const [statsRes, eventsRes, productsRes, purchasesRes, socisRes] = await Promise.all([
         fetch("/api/admin/stats", { headers: h }),
         fetch("/api/admin/events", { headers: h }),
         fetch("/api/admin/products", { headers: h }),
-        fetch(`/api/admin/purchases${activeTab !== "all" ? `?type=${activeTab}` : ""}`, { headers: h }),
+        fetch(`/api/admin/purchases${purchaseFilter}`, { headers: h }),
+        fetch("/api/admin/socis", { headers: h }),
       ]);
       if (statsRes.ok) setStats(await statsRes.json());
       if (eventsRes.ok) setEvents(await eventsRes.json());
       if (productsRes.ok) setProducts(await productsRes.json());
       if (purchasesRes.ok) setPurchases(await purchasesRes.json());
+      if (socisRes.ok) setSocis(await socisRes.json());
     } catch (err) {
       console.error("Dashboard fetch error:", err);
     } finally {
@@ -499,23 +585,60 @@ export default function AdminDashboard() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  function exportCSV() {
-    if (!purchases.length) return;
-    const headers = ["Nom", "Email", "Tipus", "Detall", "Import", "Metode", "Estat", "Data"];
-    const rows = purchases.map((p) => [
-      p.buyer_name, p.buyer_email, p.purchase_type,
-      p.event?.title ?? p.product?.name ?? p.tier?.name ?? "",
-      p.amount_eur, p.payment_method ?? "", p.payment_status,
-      new Date(p.created_at).toLocaleDateString("ca-ES"),
-    ]);
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `cfjuneda-compres-${new Date().toISOString().split("T")[0]}.csv`; a.click();
+  async function canviarEstatSoci(id: string, status: string) {
+    const res = await fetch("/api/admin/socis", {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ id, status }),
+    });
+    if (res.ok) fetchData();
   }
 
-  const TABS = [{ key: "all", label: "Totes" }, { key: "event", label: "Tiquets" }, { key: "merch", label: "Botiga" }, { key: "membership", label: "Socis" }] as const;
+  // Export de socis a part: porta DNI i IBAN, que son el que la Junta puja al
+  // banc, i que no tenen cap sentit dins de l'export de compres.
+  function exportSocisCSV() {
+    if (!socis.length) return;
+    downloadCsv(
+      `cfjuneda-socis-${new Date().toISOString().split("T")[0]}.csv`,
+      ["Nom i cognoms", "DNI/NIE", "Email", "Telèfon", "IBAN", "Modalitat", "Temporada", "Quota (€)", "Estat", "Observacions", "Data d'alta"],
+      socis.map((s) => [
+        s.nom,
+        s.dni,
+        s.email,
+        s.telefon,
+        formatIban(s.iban),
+        s.tier_name ?? s.tier_slug,
+        s.season ?? "",
+        s.price_eur != null ? Number(s.price_eur) : "",
+        s.status === "active" ? "Domiciliat" : s.status === "cancelled" ? "Anul·lat" : "Pendent",
+        s.notes ?? "",
+        new Date(s.created_at).toLocaleDateString("ca-ES"),
+      ]),
+    );
+  }
+
+  function exportCSV() {
+    if (!purchases.length) return;
+    downloadCsv(
+      `cfjuneda-compres-${new Date().toISOString().split("T")[0]}.csv`,
+      ["Nom", "Email", "Telèfon", "Tipus", "Detall", "Import (€)", "Gestió (€)", "Mètode", "Estat", "Data"],
+      purchases.map((p) => [
+        p.buyer_name,
+        p.buyer_email,
+        p.buyer_phone ?? "",
+        TYPE_LABELS[p.purchase_type] ?? p.purchase_type,
+        p.event?.title ?? p.product?.name ?? p.tier?.name ?? "",
+        p.amount_eur,
+        p.fee_eur ?? 0,
+        p.payment_method === "cash" ? "Efectiu" : "Targeta (Stripe)",
+        p.payment_status === "completed" ? "Pagat" : p.payment_status,
+        new Date(p.created_at).toLocaleDateString("ca-ES"),
+      ]),
+    );
+  }
+
+  const TABS = [{ key: "all", label: "Totes" }, { key: "event", label: "Tiquets" }, { key: "merch", label: "Botiga" }, { key: "socis", label: "Socis" }] as const;
+  const socisPendents = socis.filter((s) => s.status === "pending").length;
 
   return (
     <div className="min-h-screen bg-carbon text-white">
@@ -558,7 +681,13 @@ export default function AdminDashboard() {
           />
           <StatCard icon={Ticket} label="Tiquets Venuts" value={stats?.tickets_sold ?? "—"} sub="Tots els esdeveniments" color="green" />
           <StatCard icon={ShoppingBag} label="Comandes Botiga" value={stats?.merch_orders ?? "—"} sub="Peces venudes" color="blue" />
-          <StatCard icon={Users} label="Socis Actuals" value={stats?.active_members ?? "—"} sub="Temporada 2026/27" color="gold" />
+          <StatCard
+            icon={Users}
+            label="Socis Donats d'Alta"
+            value={socis.filter((s) => s.status !== "cancelled").length}
+            sub={socisPendents > 0 ? `${socisPendents} pendents de domiciliar` : "Totes domiciliades"}
+            color="gold"
+          />
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -691,20 +820,47 @@ export default function AdminDashboard() {
                 ))}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setShowCash(true)} className="flex items-center gap-1.5 rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-xs font-bold text-brand hover:bg-brand/20 transition-colors">
-                  <Plus size={13} /> Efectiu
-                </button>
-                <button onClick={exportCSV} className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60 hover:text-white transition-colors">
+                {activeTab !== "socis" && (
+                  <button onClick={() => setShowCash(true)} className="flex items-center gap-1.5 rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-xs font-bold text-brand hover:bg-brand/20 transition-colors">
+                    <Plus size={13} /> Efectiu
+                  </button>
+                )}
+                <button
+                  onClick={activeTab === "socis" ? exportSocisCSV : exportCSV}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60 hover:text-white transition-colors"
+                >
                   <FileDown size={13} /> CSV
                 </button>
               </div>
             </div>
+
+            {activeTab === "socis" && !loading && socis.length > 0 && (
+              <div className="mb-3 flex items-start gap-2.5 rounded-xl border border-yellow-500/25 bg-yellow-500/10 p-3 text-xs text-yellow-200/80">
+                <Landmark size={14} className="mt-0.5 shrink-0 text-yellow-400" />
+                <span>
+                  {socisPendents === 0
+                    ? "No queda cap alta pendent de domiciliar."
+                    : `${socisPendents} ${socisPendents === 1 ? "alta pendent" : "altes pendents"} de domiciliar.`}{" "}
+                  Exporta el CSV per muntar la remesa i marca les altes com a domiciliades
+                  quan el banc l&apos;hagi acceptada.
+                </span>
+              </div>
+            )}
 
             <div className="flex flex-col gap-2">
               {loading ? (
                 [...Array(5)].map((_, i) => (
                   <div key={i} className="h-16 animate-pulse rounded-xl border border-white/5 bg-white/[0.02]" />
                 ))
+              ) : activeTab === "socis" ? (
+                socis.length === 0 ? (
+                  <div className="py-12 text-center text-white/30">
+                    <Users size={32} className="mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">Cap alta de soci registrada</p>
+                  </div>
+                ) : (
+                  socis.map((s) => <SociRow key={s.id} s={s} onStatus={canviarEstatSoci} />)
+                )
               ) : purchases.length === 0 ? (
                 <div className="py-12 text-center text-white/30">
                   <Calendar size={32} className="mx-auto mb-3 opacity-30" />
@@ -736,10 +892,17 @@ export default function AdminDashboard() {
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-white/40">Ingressos Socis</span>
-                <Users size={14} className="text-yellow-400" />
+                <span className="text-xs text-white/40">Quotes de soci a domiciliar</span>
+                <Landmark size={14} className="text-yellow-400" />
               </div>
-              <p className="font-display text-2xl font-bold">{stats.membership_revenue.toFixed(2)} €</p>
+              <p className="font-display text-2xl font-bold">
+                {socis
+                  .filter((s) => s.status === "pending")
+                  .reduce((acc, s) => acc + Number(s.price_eur ?? 0), 0)
+                  .toFixed(2)}{" "}
+                €
+              </p>
+              <p className="mt-1 text-[11px] text-white/35">Encara no cobrades</p>
             </div>
           </div>
         )}
