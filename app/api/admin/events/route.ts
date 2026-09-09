@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
-import { createEventSheetTab } from "@/lib/sheets";
 
 const EVENT_TYPES = new Set(["dinner", "lunch", "party", "other"]);
 const EVENT_STATUSES = new Set(["active", "sold_out", "cancelled", "past"]);
@@ -61,13 +60,13 @@ export async function POST(req: NextRequest) {
 
   const supabase = getSupabaseAdmin();
 
-  // Auto-create Google Sheet tab for this event
-  let sheetId: string | null = null;
-  try {
-    sheetId = await createEventSheetTab(title);
-  } catch (sheetErr) {
-    console.warn("[Events] Sheet creation failed (non-fatal):", sheetErr);
-  }
+  // La pestanya del full no es crea aqui: l'Apps Script la crea, amb les
+  // capcaleres, la primera vegada que hi arriba una inscripcio. Nomes desem
+  // com s'ha de dir, perque reanomenar l'esdeveniment mes endavant no acabi
+  // escrivint en una pestanya nova i deixant enrere les files ja registrades.
+  // Mateixa neteja que netejarNomFull_() a apps-script/Codi.gs, en el mateix
+  // ordre: Google Sheets no admet [ ] * ? / \ : en un nom de pestanya.
+  const sheetId: string = title.replace(/[[\]*?/\\:]/g, "").trim().slice(0, 100);
 
   const { data, error } = await supabase
     .from("events")

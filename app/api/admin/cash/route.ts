@@ -1,7 +1,7 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
-import { appendPurchaseRow } from "@/lib/sheets";
+import { notifyPurchase } from "@/lib/notify";
 
 // POST /api/admin/cash — record a manual cash payment
 export async function POST(req: NextRequest) {
@@ -38,42 +38,47 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Sync to the relevant sheet
-  try {
-    if (purchase_type === "event" && event_id) {
-      const { data: evt } = await supabase.from("events").select("sheet_id").eq("id", event_id).single();
-      if (evt?.sheet_id) {
-        await appendPurchaseRow(evt.sheet_id, {
-          nom: buyer_name, email: buyer_email ?? "", telefon: buyer_phone,
-          tiquets: quantity ?? 1, dietetica: dietary, preu: amount_eur,
-          metode: "Efectiu 💵", estat: "Pagat ✅", data: now,
-        }, "event");
-        await supabase.from("purchases").update({ sheet_synced: true }).eq("id", purchase.id);
-      }
-    } else if (purchase_type === "merch") {
-      const masterSheetId = process.env.GOOGLE_MASTER_SHEET_ID;
-      if (masterSheetId) {
-        const { data: prod } = await supabase.from("products").select("name").eq("id", product_id).single();
-        await appendPurchaseRow(`${masterSheetId}::Botiga`, {
-          nom: buyer_name, email: buyer_email ?? "", telefon: buyer_phone,
-          producte: prod?.name, talla: size, preu: amount_eur,
-          metode: "Efectiu 💵", estat: "Pagat ✅", data: now,
-        }, "merch");
-        await supabase.from("purchases").update({ sheet_synced: true }).eq("id", purchase.id);
-      }
-    } else if (purchase_type === "membership") {
-      const masterSheetId = process.env.GOOGLE_MASTER_SHEET_ID;
-      if (masterSheetId) {
-        const { data: tier } = await supabase.from("membership_tiers").select("name, season").eq("id", tier_id).single();
-        await appendPurchaseRow(`${masterSheetId}::Socis`, {
-          nom: buyer_name, email: buyer_email ?? "", telefon: buyer_phone,
-          tipusSoci: tier?.name, temporada: tier?.season, preu: amount_eur,
-          metode: "Efectiu 💵", estat: "Pagat ✅", data: now,
-        }, "membership");
-        await supabase.from("purchases").update({ sheet_synced: true }).eq("id", purchase.id);
-      }
+  // El registre al full de la Junta. Els pagaments en efectiu no envien correu:
+  // qui paga en ma ja te el tiquet a la seva i no ha donat necessariament una
+  // adreca valida.
+  let sheet: string | null = null;
+  let row = null as Parameters<typeof notifyPurchase>[0]["row"] | null;
+  const base = {
+    nom: buyer_name,
+    email: buyer_email ?? "",
+    telefon: buyer_phone,
+    preu: amount_eur,
+    metode: "Efectiu 💵",
+    estat: "Pagat ✅",
+    data: now,
+  };
+
+  if (purchase_type === "event" && event_id) {
+    const { data: evt } = await supabase.from("events").select("sheet_id, title").eq("id", event_id).single();
+    if (evt) {
+      sheet = evt.sheet_id || evt.title;
+      row = { ...base, tiquets: quantity ?? 1, dietetica: dietary };
     }
-  } catch (sheetErr) { console.warn("[Cash] Sheet sync failed:", sheetErr); }
+  } else if (purchase_type === "merch") {
+    const { data: prod } = product_id
+      ? await supabase.from("products").select("name").eq("id", product_id).single()
+      : { data: null };
+    sheet = "Botiga";
+    row = { ...base, producte: prod?.name ?? "Producte", talla: size, personalitzacio: "Cap" };
+  } else if (purchase_type === "membership") {
+    const { data: tier } = tier_id
+      ? await supabase.from("membership_tiers").select("name, season").eq("id", tier_id).single()
+      : { data: null };
+    sheet = "Socis";
+    row = { ...base, tipusSoci: tier?.name, temporada: tier?.season };
+  }
+
+  if (sheet && row) {
+    const result = await notifyPurchase({ type: purchase_type, sheet, row, email: null });
+    if (result?.ok) {
+      await supabase.from("purchases").update({ sheet_synced: true }).eq("id", purchase.id);
+    }
+  }
 
   return NextResponse.json(purchase, { status: 201 });
 }

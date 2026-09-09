@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { appendPurchaseRow } from "@/lib/sheets";
-import { sendEventConfirmation, sendMerchConfirmation, sendMembershipWelcome } from "@/lib/email";
+import { notifyPurchase } from "@/lib/notify";
 import Stripe from "stripe";
 
 // A l'App Router no cal desactivar cap body parser: `req.text()` ja retorna
@@ -38,9 +37,10 @@ export async function POST(req: NextRequest) {
     .single();
   if (existing) return NextResponse.json({ received: true });
 
-  const purchaseType = meta.purchase_type as "event" | "merch" | "membership" ?? "event";
+  const purchaseType = (meta.purchase_type as "event" | "merch" | "membership") ?? "event";
   const amountEur = (session.amount_total ?? 0) / 100;
   const now = new Date().toLocaleString("ca-ES", { timeZone: "Europe/Madrid" });
+  const paymentMethod = session.payment_method_types?.[0] ?? "card";
 
   try {
     // ─── Event Purchase ─────────────────────────────────────────────────────────
@@ -67,19 +67,22 @@ export async function POST(req: NextRequest) {
         quantity: qty,
         dietary: meta.dietary ?? null,
         amount_eur: amountEur,
-        payment_method: session.payment_method_types?.[0] ?? "card",
+        payment_method: paymentMethod,
         payment_status: "completed",
       }).select().single();
 
       if (insertErr) { console.error("[Webhook] Insert error:", insertErr); }
 
-      // Fetch event for sheet sync
       const { data: evt } = await supabase.from("events").select("*").eq("id", eventId).single();
 
-      // Sync to Google Sheet
-      if (evt?.sheet_id) {
-        try {
-          await appendPurchaseRow(evt.sheet_id, {
+      if (evt) {
+        // sheet_id guarda el nom de la pestanya des que es va crear
+        // l'esdeveniment; els esdeveniments antics (o els del seed) no en
+        // tenen i cauen al títol, que és el que la Junta hi busca igualment.
+        const result = await notifyPurchase({
+          type: "event",
+          sheet: evt.sheet_id || evt.title,
+          row: {
             nom: meta.buyer_name,
             email: meta.buyer_email,
             telefon: meta.buyer_phone,
@@ -89,17 +92,8 @@ export async function POST(req: NextRequest) {
             metode: "Targeta (Stripe)",
             estat: "Pagat ✅",
             data: now,
-          }, "event");
-          if (purchase?.id) {
-            await supabase.from("purchases").update({ sheet_synced: true }).eq("id", purchase.id);
-          }
-        } catch (sheetErr) { console.error("[Webhook] Sheet sync error:", sheetErr); }
-      }
-
-      // Send confirmation email
-      try {
-        if (evt) {
-          await sendEventConfirmation({
+          },
+          email: {
             to: meta.buyer_email,
             buyerName: meta.buyer_name,
             eventTitle: evt.title,
@@ -108,12 +102,11 @@ export async function POST(req: NextRequest) {
             quantity: qty,
             dietary: meta.dietary,
             total: amountEur,
-          });
-          if (purchase?.id) {
-            await supabase.from("purchases").update({ email_sent: true }).eq("id", purchase.id);
-          }
-        }
-      } catch (emailErr) { console.error("[Webhook] Email error:", emailErr); }
+          },
+        });
+
+        await marcarSincronitzacio(supabase, purchase?.id, result);
+      }
     }
 
     // ─── Merch Purchase ─────────────────────────────────────────────────────────
@@ -129,7 +122,7 @@ export async function POST(req: NextRequest) {
 
       // Decrement stock for the size
       const { data: product } = productId
-        ? await supabase.from("products").select("stock").eq("id", productId).single()
+        ? await supabase.from("products").select("stock, name").eq("id", productId).single()
         : { data: null };
       if (product) {
         const stock = product.stock as Record<string, number>;
@@ -151,50 +144,41 @@ export async function POST(req: NextRequest) {
         size: meta.size,
         custom_number: meta.custom_number ?? null,
         amount_eur: amountEur,
-        payment_method: session.payment_method_types?.[0] ?? "card",
+        payment_method: paymentMethod,
         payment_status: "completed",
       }).select().single();
 
       if (merchInsertErr) { console.error("[Webhook] Merch insert error:", merchInsertErr); }
 
-      // Sync to Botiga sheet
-      const masterSheetId = process.env.GOOGLE_MASTER_SHEET_ID;
-      if (masterSheetId) {
-        try {
-          const { data: prod } = productId
-            ? await supabase.from("products").select("name").eq("id", productId).single()
-            : { data: null };
-          await appendPurchaseRow(`${masterSheetId}::Botiga`, {
-            nom: meta.buyer_name,
-            email: meta.buyer_email,
-            telefon: meta.buyer_phone,
-            producte: prod?.name ?? meta.product_slug ?? "Producte",
-            talla: meta.size,
-            personalitzacio: meta.custom_number ? `#${meta.custom_number}` : "Cap",
-            preu: amountEur,
-            metode: "Targeta (Stripe)",
-            estat: "Pagat ✅",
-            data: now,
-          }, "merch");
-          if (purchase?.id) await supabase.from("purchases").update({ sheet_synced: true }).eq("id", purchase.id);
-        } catch (sheetErr) { console.error("[Webhook] Merch sheet error:", sheetErr); }
-      }
+      const productName = product?.name ?? meta.product_slug ?? "Producte";
+      const customization = meta.custom_number ? `#${meta.custom_number}` : undefined;
 
-      // Email
-      try {
-        const { data: prod } = productId
-          ? await supabase.from("products").select("name").eq("id", productId).single()
-          : { data: null };
-        await sendMerchConfirmation({
+      const result = await notifyPurchase({
+        type: "merch",
+        sheet: "Botiga",
+        row: {
+          nom: meta.buyer_name,
+          email: meta.buyer_email,
+          telefon: meta.buyer_phone,
+          producte: productName,
+          talla: meta.size,
+          personalitzacio: customization ?? "Cap",
+          preu: amountEur,
+          metode: "Targeta (Stripe)",
+          estat: "Pagat ✅",
+          data: now,
+        },
+        email: {
           to: meta.buyer_email,
           buyerName: meta.buyer_name,
-          productName: prod?.name ?? "",
+          productName,
           size: meta.size,
-          customization: meta.custom_number ? `#${meta.custom_number}` : undefined,
+          customization,
           total: amountEur,
-        });
-        if (purchase?.id) await supabase.from("purchases").update({ email_sent: true }).eq("id", purchase.id);
-      } catch (emailErr) { console.error("[Webhook] Merch email error:", emailErr); }
+        },
+      });
+
+      await marcarSincronitzacio(supabase, purchase?.id, result);
     }
 
     // ─── Membership Purchase ─────────────────────────────────────────────────
@@ -217,48 +201,38 @@ export async function POST(req: NextRequest) {
         buyer_phone: meta.buyer_phone ?? null,
         tier_id: tierId,
         amount_eur: amountEur,
-        payment_method: session.payment_method_types?.[0] ?? "card",
+        payment_method: paymentMethod,
         payment_status: "completed",
       }).select().single();
 
-      // Sync to Socis sheet
-      const masterSheetId = process.env.GOOGLE_MASTER_SHEET_ID;
-      if (masterSheetId) {
-        try {
-          const { data: tier } = tierId
-            ? await supabase.from("membership_tiers").select("name, season").eq("id", tierId).single()
-            : { data: null };
-          await appendPurchaseRow(`${masterSheetId}::Socis`, {
-            nom: meta.buyer_name,
-            email: meta.buyer_email,
-            telefon: meta.buyer_phone,
-            tipusSoci: tier?.name,
-            temporada: tier?.season,
-            preu: amountEur,
-            metode: "Targeta (Stripe)",
-            estat: "Pagat ✅",
-            data: now,
-          }, "membership");
-          if (purchase?.id) await supabase.from("purchases").update({ sheet_synced: true }).eq("id", purchase.id);
-        } catch (sheetErr) { console.error("[Webhook] Soci sheet error:", sheetErr); }
-      }
+      const { data: tier } = tierId
+        ? await supabase.from("membership_tiers").select("name, season").eq("id", tierId).single()
+        : { data: null };
 
-      // Email
-      try {
-        const { data: tier } = tierId
-          ? await supabase.from("membership_tiers").select("name, season").eq("id", tierId).single()
-          : { data: null };
-        if (tier) {
-          await sendMembershipWelcome({
-            to: meta.buyer_email,
-            buyerName: meta.buyer_name,
-            tierName: tier.name,
-            season: tier.season,
-            total: amountEur,
-          });
-          if (purchase?.id) await supabase.from("purchases").update({ email_sent: true }).eq("id", purchase.id);
-        }
-      } catch (emailErr) { console.error("[Webhook] Soci email error:", emailErr); }
+      const result = await notifyPurchase({
+        type: "membership",
+        sheet: "Socis",
+        row: {
+          nom: meta.buyer_name,
+          email: meta.buyer_email,
+          telefon: meta.buyer_phone,
+          tipusSoci: tier?.name,
+          temporada: tier?.season,
+          preu: amountEur,
+          metode: "Targeta (Stripe)",
+          estat: "Pagat ✅",
+          data: now,
+        },
+        email: {
+          to: meta.buyer_email,
+          buyerName: meta.buyer_name,
+          tierName: tier?.name,
+          season: tier?.season,
+          total: amountEur,
+        },
+      });
+
+      await marcarSincronitzacio(supabase, purchase?.id, result);
     }
 
     return NextResponse.json({ received: true });
@@ -266,4 +240,22 @@ export async function POST(req: NextRequest) {
     console.error("[Webhook] Processing error:", err);
     return NextResponse.json({ error: "Processing failed" }, { status: 500 });
   }
+}
+
+/**
+ * La fila i el correu poden anar per separat: l'Apps Script escriu el full
+ * encara que Gmail rebutgi l'enviament, així que la compra es marca com a
+ * sincronitzada tot i que el correu hagi fallat. Des d'/admin es veu quins
+ * compradors no l'han rebut.
+ */
+async function marcarSincronitzacio(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  purchaseId: string | undefined,
+  result: Awaited<ReturnType<typeof notifyPurchase>>,
+) {
+  if (!purchaseId || !result?.ok) return;
+  await supabase
+    .from("purchases")
+    .update({ sheet_synced: true, email_sent: result.correuEnviat === true })
+    .eq("id", purchaseId);
 }
