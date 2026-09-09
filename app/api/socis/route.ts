@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getMembershipTier } from "@/lib/memberships";
 import { notifyPurchase } from "@/lib/notify";
-import { normalitzaIdentificador, validaDni, validaIban, formatIban } from "@/lib/identitat";
+import { normalitzaIdentificador, normalitzaDni, validaDni, validaIban, formatIban } from "@/lib/identitat";
 import { TERMS_VERSION } from "@/lib/legal";
 
 // POST /api/socis — alta de soci SENSE pagament en linia.
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const nom = net(body.nom, 120);
     const email = net(body.email, 160);
     const telefon = net(body.telefon, 40);
-    const dni = normalitzaIdentificador(net(body.dni, 20));
+    const dni = normalitzaDni(net(body.dni, 20));
     const iban = normalitzaIdentificador(net(body.iban, 40));
     const notes = net(body.notes, 500);
     const tierSlug = net(body.tierSlug, 80) || "soci-general";
@@ -47,7 +47,11 @@ export async function POST(req: NextRequest) {
     }
     if (!validaDni(dni)) {
       return NextResponse.json(
-        { error: "El DNI o NIE no és vàlid. Revisa que hi hagi 8 xifres i la lletra." },
+        {
+          error:
+            "El DNI o NIE no és vàlid. La lletra final és un dígit de control: " +
+            "ha de correspondre al número, tal com surt al document.",
+        },
         { status: 400 },
       );
     }

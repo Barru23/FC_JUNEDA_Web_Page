@@ -16,11 +16,38 @@ const DNI_LLETRES = "TRWAGMYFPDXBNJZSQVHLCKE";
 const NIE_PREFIX: Record<string, string> = { X: "0", Y: "1", Z: "2" };
 
 /**
+ * Forma canonica del document: 8 xifres + lletra (DNI), o X/Y/Z + 7 xifres +
+ * lletra (NIE).
+ *
+ * Els zeros del davant es completen. Un DNI com "01234567L" es escriu molt
+ * sovint sense el zero inicial, perque de memoria ningu no el diu, i llavors
+ * queda a set xifres. La lletra de control es calcula sobre el numero de vuit
+ * xifres, aixi que sense completar-lo el document es rebutjava tot i ser bo.
+ *
+ * Tambe serveix per desar sempre la mateixa forma a la base de dades: si un
+ * soci s'inscriu amb "1234567L" i despres amb "01234567L", l'index unic de
+ * (dni, temporada) nomes els reconeix com la mateixa persona si les dues
+ * versions s'han normalitzat igual.
+ */
+export function normalitzaDni(value: string): string {
+  const net = normalitzaIdentificador(value);
+  const parts = /^([XYZ]?)(\d{1,8})([A-Z])$/.exec(net);
+  if (!parts) return net;
+
+  const [, prefix, xifres, lletra] = parts;
+  const amplada = prefix ? 7 : 8;
+  if (xifres.length > amplada) return net;
+
+  return prefix + xifres.padStart(amplada, "0") + lletra;
+}
+
+/**
  * DNI (8 xifres + lletra) o NIE (X/Y/Z + 7 xifres + lletra). La lletra es un
- * digit de control: el residu del numero entre 23 indexa una taula fixa.
+ * digit de control: el residu del numero entre 23 indexa una taula fixa, de
+ * manera que un numero inventat gairebe mai no case amb la seva lletra.
  */
 export function validaDni(value: string): boolean {
-  const dni = normalitzaIdentificador(value);
+  const dni = normalitzaDni(value);
   if (!/^[0-9XYZ][0-9]{7}[A-Z]$/.test(dni)) return false;
 
   const cos = dni.slice(0, 8);

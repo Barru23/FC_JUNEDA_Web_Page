@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import type { MembershipTierEntry } from "@/lib/memberships";
 import { ConsentCheckbox, LegalLink } from "@/components/legal/ConsentCheckbox";
-import { validaDni, validaIban, formatIban } from "@/lib/identitat";
+import { validaDni, validaIban, formatIban, normalitzaDni } from "@/lib/identitat";
 
 const TIER_ICONS = {
   Users,
@@ -334,15 +334,21 @@ export function SocisSection() {
                     required
                     value={dni}
                     onChange={(e) => setDni(e.target.value.toUpperCase())}
+                    onBlur={() => dni.trim() && setDni(normalitzaDni(dni))}
                     placeholder="12345678X"
                     aria-invalid={!dniValid}
                     className={`w-full rounded-xl border bg-black/50 px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none transition-colors focus:border-brand ${
                       dniValid ? "border-white/10" : "border-red-500/60"
                     }`}
                   />
-                  {!dniValid && (
+                  {!dniValid ? (
                     <span className="text-[11px] text-red-400">
-                      Revisa el DNI: 8 xifres i la lletra final.
+                      La lletra no correspon al número. És un dígit de control:
+                      copia&apos;l tal com surt al document.
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-white/35">
+                      Amb la lletra. Si comença per zero, no cal que l&apos;escriguis.
                     </span>
                   )}
                 </FormField>
