@@ -8,11 +8,11 @@ import { Modal } from "@/components/ui/Modal";
 import { restoreScrollTo } from "@/lib/hooks/useScrollLock";
 
 const LINKS = [
-  { href: "#calendari", label: "Calendari" },
   { href: "#botiga", label: "Botiga" },
   { href: "#esdeveniments", label: "Esdeveniments" },
-  { href: "#socis", label: "Fes-te Soci" },
+  { href: "#socis", label: "Socis" },
   { href: "#plantilla", label: "Plantilla" },
+  { href: "#calendari", label: "Calendari" },
 ];
 
 export function Nav({ crestRevealed }: { crestRevealed: boolean }) {

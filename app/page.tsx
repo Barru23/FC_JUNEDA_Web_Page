@@ -6,7 +6,6 @@ import { AmbientBackground } from "@/components/AmbientBackground";
 import { Loader } from "@/components/Loader";
 import { Nav } from "@/components/Nav";
 import { Hero } from "@/components/Hero";
-import { BentoGrid } from "@/components/BentoGrid";
 import { CalendarSection } from "@/components/CalendarSection";
 import { EventsSection } from "@/components/EventsSection";
 import { ShopSection } from "@/components/ShopSection";
@@ -32,12 +31,11 @@ export default function Home() {
         transition={{ duration: 0.6, delay: loading ? 0 : 0.2 }}
       >
         <Hero />
-        <BentoGrid />
-        <CalendarSection />
         <ShopSection />
         <EventsSection />
         <SocisSection />
         <TacticalPitchRoster />
+        <CalendarSection />
         <Footer />
       </motion.main>
     </>
