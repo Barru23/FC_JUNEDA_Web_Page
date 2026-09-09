@@ -81,7 +81,7 @@ type AdminEvent = {
   id: string; title: string; description?: string | null; event_type?: string;
   date: string; location: string; menu?: string | null; image_url?: string | null;
   price_eur: number; total_spots: number; spots_remaining: number;
-  booking_fee_eur: number; status: string; sheet_id?: string;
+  status: string; sheet_id?: string;
 };
 
 function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: () => void; onSaved: () => void }) {
@@ -95,7 +95,6 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
     image_url: event?.image_url ?? "",
     price_eur: event ? String(event.price_eur) : "",
     total_spots: event ? String(event.total_spots) : "",
-    booking_fee_eur: event ? String(event.booking_fee_eur) : "0.75",
     event_type: event?.event_type ?? "dinner",
     spots_remaining: event ? String(event.spots_remaining) : "",
     status: event?.status ?? "active",
@@ -115,7 +114,6 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
         date: form.date, location: form.location, menu: form.menu,
         image_url: form.image_url.trim() || null,
         price_eur: parseFloat(form.price_eur), total_spots: parseInt(form.total_spots),
-        booking_fee_eur: parseFloat(form.booking_fee_eur),
       };
       if (isEdit) {
         payload.id = event!.id;
@@ -192,10 +190,6 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
           <div>
             <label className="label">Places totals *</label>
             <input className={inputCls} type="number" min="1" value={form.total_spots} onChange={e => set("total_spots", e.target.value)} required placeholder="150" />
-          </div>
-          <div>
-            <label className="label">Taxa de gestió (€)</label>
-            <input className={inputCls} type="number" min="0" step="0.01" value={form.booking_fee_eur} onChange={e => set("booking_fee_eur", e.target.value)} placeholder="0.75" />
           </div>
           {isEdit && (
             <div>
@@ -551,7 +545,17 @@ export default function AdminDashboard() {
       <main className="mx-auto max-w-7xl px-6 py-8">
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 mb-8">
-          <StatCard icon={Euro} label="Ingressos Totals" value={`${stats?.total_revenue?.toFixed(2) ?? "—"} €`} sub="Pagaments confirmats" color="brand" />
+          <StatCard
+            icon={Euro}
+            label="Ingressos Totals"
+            value={`${stats?.total_revenue?.toFixed(2) ?? "—"} €`}
+            sub={
+              stats?.fees_collected
+                ? `Net del club · ${stats.fees_collected.toFixed(2)} € de gestió a Stripe`
+                : "Pagaments confirmats"
+            }
+            color="brand"
+          />
           <StatCard icon={Ticket} label="Tiquets Venuts" value={stats?.tickets_sold ?? "—"} sub="Tots els esdeveniments" color="green" />
           <StatCard icon={ShoppingBag} label="Comandes Botiga" value={stats?.merch_orders ?? "—"} sub="Peces venudes" color="blue" />
           <StatCard icon={Users} label="Socis Actuals" value={stats?.active_members ?? "—"} sub="Temporada 2026/27" color="gold" />

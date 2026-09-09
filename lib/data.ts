@@ -16,7 +16,6 @@ export type ClubEvent = {
   spotsLeft: number;
   totalSpots?: number;
   status?: string;
-  bookingFee?: number;
 };
 
 export type MembershipTier = {
@@ -44,6 +43,8 @@ export type Purchase = {
   custom_name?: string;
   custom_number?: string;
   amount_eur: number;
+  /** Despeses de gestió cobrades al comprador. Se'n van íntegres a Stripe. */
+  fee_eur?: number;
   payment_method?: string;
   payment_status: "pending" | "completed" | "refunded" | "failed";
   sheet_synced: boolean;
@@ -60,6 +61,7 @@ export type DashboardStats = {
   event_revenue: number;
   merch_revenue: number;
   membership_revenue: number;
+  fees_collected: number;
   tickets_sold: number;
   merch_orders: number;
   active_members: number;

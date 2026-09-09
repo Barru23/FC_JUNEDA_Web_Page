@@ -9,7 +9,6 @@
     "description": "Dinar de club per celebrar el derbi de la temporada. Detalls de menú i preu pendents de confirmació.",
     "eventType": "lunch",
     "priceEur": 20.00,
-    "bookingFeeEur": 0.75,
     "totalSpots": 120,
     "status": "active"
   }

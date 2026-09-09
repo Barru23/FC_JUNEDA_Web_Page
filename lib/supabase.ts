@@ -45,7 +45,9 @@ export type DbEvent = {
   price_eur: number;
   total_spots: number;
   spots_remaining: number;
-  booking_fee_eur: number;
+  /** Llegat: la columna existeix a la BD però l'app ja no la fa servir
+   *  — les despeses de gestió es calculen a lib/fees.ts. */
+  booking_fee_eur?: number;
   sheet_id: string | null;
   status: "active" | "sold_out" | "cancelled" | "past";
   created_at: string;
@@ -111,6 +113,7 @@ export type DashboardStats = {
   event_revenue: number;
   merch_revenue: number;
   membership_revenue: number;
+  fees_collected: number;
   tickets_sold: number;
   merch_orders: number;
   active_members: number;

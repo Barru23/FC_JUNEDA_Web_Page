@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS events (
   price_eur       DECIMAL(8,2) NOT NULL,
   total_spots     INT NOT NULL,
   spots_remaining INT NOT NULL,
+  -- Llegat: ja no s'usa. Les despeses de gestio es calculen a lib/fees.ts
+  -- a partir del preu, i no son editables des d'/admin.
   booking_fee_eur DECIMAL(8,2) DEFAULT 0.75,
   sheet_id        TEXT,
   status          TEXT DEFAULT 'active',

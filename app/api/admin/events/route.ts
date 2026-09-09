@@ -10,11 +10,6 @@ function positiveMoney(value: unknown): number | null {
   return Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : null;
 }
 
-function nonNegativeMoney(value: unknown): number | null {
-  const amount = Number(value);
-  return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) / 100 : null;
-}
-
 // GET /api/admin/events — list all events with purchase counts
 export async function GET(req: NextRequest) {
   if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
@@ -44,7 +39,6 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { title, description, event_type, date, location, menu, image_url } = body;
   const priceEur = positiveMoney(body.price_eur);
-  const bookingFeeEur = nonNegativeMoney(body.booking_fee_eur ?? 0.75);
   const totalSpots = Number(body.total_spots);
 
   if (
@@ -54,8 +48,8 @@ export async function POST(req: NextRequest) {
   ) {
     return NextResponse.json({ error: "Falten camps obligatoris" }, { status: 400 });
   }
-  if (priceEur === null || bookingFeeEur === null || !Number.isInteger(totalSpots) || totalSpots < 1) {
-    return NextResponse.json({ error: "Preu, taxa o places no vàlids" }, { status: 400 });
+  if (priceEur === null || !Number.isInteger(totalSpots) || totalSpots < 1) {
+    return NextResponse.json({ error: "Preu o places no vàlids" }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
@@ -81,7 +75,6 @@ export async function POST(req: NextRequest) {
       price_eur: priceEur,
       total_spots: totalSpots,
       spots_remaining: totalSpots,
-      booking_fee_eur: bookingFeeEur,
       sheet_id: sheetId,
       status: "active",
     })
@@ -101,19 +94,17 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID requerit" }, { status: 400 });
 
   const priceEur = positiveMoney(body.price_eur);
-  const bookingFeeEur = nonNegativeMoney(body.booking_fee_eur);
   const totalSpots = Number(body.total_spots);
   const spotsRemaining = Number(body.spots_remaining);
   if (
     priceEur === null ||
-    bookingFeeEur === null ||
     !Number.isInteger(totalSpots) ||
     totalSpots < 1 ||
     !Number.isInteger(spotsRemaining) ||
     spotsRemaining < 0 ||
     spotsRemaining > totalSpots
   ) {
-    return NextResponse.json({ error: "Preu, taxa o places no vàlids" }, { status: 400 });
+    return NextResponse.json({ error: "Preu o places no vàlids" }, { status: 400 });
   }
 
   const updates = {
@@ -127,7 +118,6 @@ export async function PATCH(req: NextRequest) {
     price_eur: priceEur,
     total_spots: totalSpots,
     spots_remaining: spotsRemaining,
-    booking_fee_eur: bookingFeeEur,
     status: EVENT_STATUSES.has(body.status) ? body.status : "active",
   };
   if (!updates.title || !updates.date || !updates.location) {

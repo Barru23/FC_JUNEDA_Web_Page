@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SectionHeading } from "./EventsSection";
 import { KitViewer2D } from "./KitViewer2D";
 import { Modal } from "@/components/ui/Modal";
+import { serviceFeeEur } from "@/lib/fees";
 import { Loader2, ShoppingBag, X } from "lucide-react";
 
 type ViewType = "front" | "back";
@@ -78,6 +79,10 @@ export function ShopSection() {
   const name = product?.name ?? "";
   const description = product?.description ?? "";
   const price = Number(product?.price_eur ?? 0);
+  // El catàleg i el configurador ensenyen `price`; la gestió només apareix al
+  // resum d'abans de pagar. El servidor la recalcula amb el preu de Supabase.
+  const fee = serviceFeeEur(price);
+  const total = price + fee;
   const sizes = product?.sizes ?? [];
   const stock = product?.stock ?? {};
   const selectedSizeOutOfStock = !product || !size || Number(stock[size] ?? 0) <= 0;
@@ -341,9 +346,17 @@ export function ShopSection() {
                     <span className="font-bold text-brand">#{number}</span>
                   </div>
                 )}
+                <div className="flex justify-between border-t border-white/10 pt-1.5">
+                  <span>Preu:</span>
+                  <span className="text-white">{price.toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Despeses de gestió:</span>
+                  <span className="text-white">{fee.toFixed(2)} €</span>
+                </div>
                 <div className="flex justify-between border-t border-white/10 pt-1.5 font-semibold text-white">
                   <span>Total:</span>
-                  <span className="font-display text-sm text-brand">{price.toFixed(2)} €</span>
+                  <span className="font-display text-sm text-brand">{total.toFixed(2)} €</span>
                 </div>
               </div>
 
@@ -412,7 +425,7 @@ export function ShopSection() {
                     {loading ? (
                       <><Loader2 size={14} className="animate-spin" /> Tramitant...</>
                     ) : (
-                      `Pagar ${price.toFixed(2)} €`
+                      `Pagar ${total.toFixed(2)} €`
                     )}
                   </button>
                 </div>

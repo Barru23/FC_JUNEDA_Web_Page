@@ -5,6 +5,7 @@ import { useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import type { ClubEvent } from "@/lib/data";
 import { Modal } from "@/components/ui/Modal";
+import { serviceFeeEur } from "@/lib/fees";
 
 const DIETARY_OPTIONS = [
   "Cap intolerancia",
@@ -30,8 +31,10 @@ export function BookingDrawer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Nomes per mostrar-lo: el servidor el torna a calcular amb el preu de
+  // Supabase, aixi que aquest numero no pot alterar el que es cobra.
   const baseTotal = quantity * event.price;
-  const fee = event.bookingFee ?? 0.75;
+  const fee = serviceFeeEur(baseTotal);
   const total = baseTotal + fee;
 
   async function handleCheckout() {
@@ -219,7 +222,7 @@ export function BookingDrawer({
               <SummaryRow label="Dietètica" value={dietary} />
               <SummaryRow label="Correu" value={email} />
               <SummaryRow label="Preu base" value={`${baseTotal.toFixed(2)} €`} />
-              <SummaryRow label="Despeses gestió" value={`${fee.toFixed(2)} €`} />
+              <SummaryRow label="Despeses de gestió" value={`${fee.toFixed(2)} €`} />
               <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-4">
                 <span className="text-white/50">Total</span>
                 <span className="font-display text-xl font-bold">{total.toFixed(2)} €</span>

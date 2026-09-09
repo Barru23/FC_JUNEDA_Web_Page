@@ -16,7 +16,6 @@ export interface EventCatalogueEntry {
   imageUrl?: string;
   eventType: "dinner" | "lunch" | "party" | "other";
   priceEur: number;
-  bookingFeeEur: number;
   totalSpots: number;
   status: "active" | "cancelled";
 }
@@ -55,7 +54,6 @@ export async function syncEventCatalogue(supabase: SupabaseClient): Promise<void
       price_eur: event.priceEur,
       total_spots: event.totalSpots,
       spots_remaining: event.totalSpots,
-      booking_fee_eur: event.bookingFeeEur,
       status: "active",
     }))
   );
@@ -81,6 +79,5 @@ export function mapDbEvent(row: DbEvent): ClubEvent {
     spotsLeft: row.spots_remaining,
     totalSpots: row.total_spots,
     status: row.status,
-    bookingFee: Number(row.booking_fee_eur ?? 0),
   };
 }

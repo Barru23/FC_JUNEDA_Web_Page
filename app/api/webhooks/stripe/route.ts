@@ -7,6 +7,13 @@ import Stripe from "stripe";
 // A l'App Router no cal desactivar cap body parser: `req.text()` ja retorna
 // els bytes crus que Stripe necessita per verificar la signatura.
 
+/** Import de la metadata de Stripe, sempre string. `null` si no hi és o no és un número. */
+function parseMoney(value: string | undefined): number | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const sig = req.headers.get("stripe-signature");
@@ -38,7 +45,16 @@ export async function POST(req: NextRequest) {
   if (existing) return NextResponse.json({ received: true });
 
   const purchaseType = (meta.purchase_type as "event" | "merch" | "membership") ?? "event";
-  const amountEur = (session.amount_total ?? 0) / 100;
+
+  // `totalPaidEur` es el que el comprador veu al seu extracte; `amountEur` es
+  // el que li queda al club un cop descomptada la despesa de gestio, i es el
+  // que es desa com a ingres. No els barregem: la comptabilitat vol el net, i
+  // el full de la Junta i el correu de confirmacio volen el total pagat.
+  const totalPaidEur = (session.amount_total ?? 0) / 100;
+  const feeEur = parseMoney(meta.fee_eur);
+  // Les compres iniciades abans d'aquest desplegament no porten el desglos a la
+  // metadata: alli el total pagat ja es tot ingres.
+  const amountEur = parseMoney(meta.net_eur) ?? totalPaidEur - (feeEur ?? 0);
   const now = new Date().toLocaleString("ca-ES", { timeZone: "Europe/Madrid" });
   const paymentMethod = session.payment_method_types?.[0] ?? "card";
 
@@ -67,6 +83,7 @@ export async function POST(req: NextRequest) {
         quantity: qty,
         dietary: meta.dietary ?? null,
         amount_eur: amountEur,
+        fee_eur: feeEur ?? 0,
         payment_method: paymentMethod,
         payment_status: "completed",
       }).select().single();
@@ -88,7 +105,7 @@ export async function POST(req: NextRequest) {
             telefon: meta.buyer_phone,
             tiquets: qty,
             dietetica: meta.dietary,
-            preu: amountEur,
+            preu: totalPaidEur,
             metode: "Targeta (Stripe)",
             estat: "Pagat ✅",
             data: now,
@@ -101,7 +118,7 @@ export async function POST(req: NextRequest) {
             eventLocation: evt.location,
             quantity: qty,
             dietary: meta.dietary,
-            total: amountEur,
+            total: totalPaidEur,
           },
         });
 
@@ -144,6 +161,7 @@ export async function POST(req: NextRequest) {
         size: meta.size,
         custom_number: meta.custom_number ?? null,
         amount_eur: amountEur,
+        fee_eur: feeEur ?? 0,
         payment_method: paymentMethod,
         payment_status: "completed",
       }).select().single();
@@ -163,7 +181,7 @@ export async function POST(req: NextRequest) {
           producte: productName,
           talla: meta.size,
           personalitzacio: customization ?? "Cap",
-          preu: amountEur,
+          preu: totalPaidEur,
           metode: "Targeta (Stripe)",
           estat: "Pagat ✅",
           data: now,
@@ -174,7 +192,7 @@ export async function POST(req: NextRequest) {
           productName,
           size: meta.size,
           customization,
-          total: amountEur,
+          total: totalPaidEur,
         },
       });
 
@@ -201,6 +219,7 @@ export async function POST(req: NextRequest) {
         buyer_phone: meta.buyer_phone ?? null,
         tier_id: tierId,
         amount_eur: amountEur,
+        fee_eur: feeEur ?? 0,
         payment_method: paymentMethod,
         payment_status: "completed",
       }).select().single();
@@ -218,7 +237,7 @@ export async function POST(req: NextRequest) {
           telefon: meta.buyer_phone,
           tipusSoci: tier?.name,
           temporada: tier?.season,
-          preu: amountEur,
+          preu: totalPaidEur,
           metode: "Targeta (Stripe)",
           estat: "Pagat ✅",
           data: now,
@@ -228,7 +247,7 @@ export async function POST(req: NextRequest) {
           buyerName: meta.buyer_name,
           tierName: tier?.name,
           season: tier?.season,
-          total: amountEur,
+          total: totalPaidEur,
         },
       });
 

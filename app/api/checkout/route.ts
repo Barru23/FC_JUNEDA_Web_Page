@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getMembershipTier } from "@/lib/memberships";
+import { serviceFeeCents } from "@/lib/fees";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -12,6 +13,24 @@ function validPrice(value: unknown): value is number {
 
 function metadataValue(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, 500) : "";
+}
+
+// La despesa de gestio es cobra un cop per comanda, no per unitat: la comissio
+// de Stripe tambe es una per transaccio. Va com a line item propi perque el
+// comprador la vegi desglossada dins de la propia pagina de Stripe, no nomes al
+// resum d'abans de pagar.
+function feeLineItem(feeCents: number) {
+  return {
+    price_data: {
+      currency: "eur",
+      product_data: {
+        name: "Despeses de gestió",
+        description: "Comissió de la passarel·la de pagament en línia",
+      },
+      unit_amount: feeCents,
+    },
+    quantity: 1,
+  };
 }
 
 // Stripe rebutja amb `url_invalid` qualsevol success_url que no sigui una URL
@@ -83,6 +102,11 @@ export async function POST(req: NextRequest) {
       };
       quantity: number;
     }[] = [];
+    // El desglos net/gestio es resol aqui, amb el preu de Supabase a la ma, i
+    // viatja a la metadata perque el webhook el pugui desar sense recalcular-lo
+    // ni tornar a consultar la base de dades.
+    let netCents = 0;
+    let feeCents = 0;
     let metadata: Record<string, string> = {
       type,
       buyer_email: metadataValue(email),
@@ -116,10 +140,13 @@ export async function POST(req: NextRequest) {
       }
 
       const priceEur = Number(eventRow.price_eur);
-      const bookingFeeEur = Number(eventRow.booking_fee_eur ?? 0);
-      if (!validPrice(priceEur) || !Number.isFinite(bookingFeeEur) || bookingFeeEur < 0) {
+      if (!validPrice(priceEur)) {
         return NextResponse.json({ error: "El preu de l'esdeveniment no és vàlid" }, { status: 409 });
       }
+
+      const unitCents = Math.round(priceEur * 100);
+      netCents = unitCents * ticketQuantity;
+      feeCents = serviceFeeCents(netCents);
 
       lineItems = [
         {
@@ -129,25 +156,12 @@ export async function POST(req: NextRequest) {
               name: eventRow.title,
               description: `${ticketQuantity} tiquet(s) · ${eventRow.date} · ${eventRow.location}`,
             },
-            unit_amount: Math.round(priceEur * 100),
+            unit_amount: unitCents,
           },
           quantity: ticketQuantity,
         },
+        feeLineItem(feeCents),
       ];
-
-      if (bookingFeeEur > 0) {
-        lineItems.push({
-          price_data: {
-            currency: "eur",
-            product_data: {
-              name: "Despeses de gestió online",
-              description: "Taxa de gestió per compra en línia",
-            },
-            unit_amount: Math.round(bookingFeeEur * 100),
-          },
-          quantity: 1,
-        });
-      }
 
       metadata = {
         ...metadata,
@@ -201,6 +215,9 @@ export async function POST(req: NextRequest) {
         customization = `#${customNumber}`;
       }
 
+      netCents = Math.round(productPrice * 100);
+      feeCents = serviceFeeCents(netCents);
+
       lineItems = [
         {
           price_data: {
@@ -209,10 +226,11 @@ export async function POST(req: NextRequest) {
               name: product.name,
               description: [size, customization].filter(Boolean).join(" · ") || undefined,
             },
-            unit_amount: Math.round(productPrice * 100),
+            unit_amount: netCents,
           },
           quantity: 1,
         },
+        feeLineItem(feeCents),
       ];
 
       metadata = {
@@ -256,6 +274,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "El preu de la quota no és vàlid" }, { status: 409 });
       }
 
+      // Les quotes de soci no porten despeses de gestio: la comissio de Stripe
+      // la continua assumint el club.
+      netCents = Math.round(tierPrice * 100);
+      feeCents = 0;
+
       lineItems = [
         {
           price_data: {
@@ -264,7 +287,7 @@ export async function POST(req: NextRequest) {
               name: `${tierName} — Temporada ${season}`,
               description: "Quota de soci Club Futbol Juneda",
             },
-            unit_amount: Math.round(tierPrice * 100),
+            unit_amount: netCents,
           },
           quantity: 1,
         },
@@ -277,6 +300,12 @@ export async function POST(req: NextRequest) {
         purchase_type: "membership",
       };
     }
+
+    metadata = {
+      ...metadata,
+      net_eur: (netCents / 100).toFixed(2),
+      fee_eur: (feeCents / 100).toFixed(2),
+    };
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { AnimatePresence } from "framer-motion";
 import { BookingDrawer } from "./BookingDrawer";
 import type { ClubEvent } from "@/lib/data";
+import { serviceFeeEur } from "@/lib/fees";
 import { CalendarDays, MapPin, UtensilsCrossed } from "lucide-react";
 
 export function EventsSection() {
@@ -106,9 +107,13 @@ export function EventsSection() {
                 <div className="mt-auto flex items-center justify-between border-t border-white/10 pt-4">
                   <div className="flex flex-col">
                     <span className="font-display text-xl font-bold text-white">{Number(event.price).toFixed(2)} €</span>
-                    {(event.bookingFee ?? 0) > 0 && (
-                      <span className="text-xs text-white/35">+ {Number(event.bookingFee).toFixed(2)} € gestió</span>
-                    )}
+                    {/* La gestio es calcula sobre el total de la comanda, no per
+                        tiquet, aixi que aqui ensenyem la d'un sol tiquet -- que
+                        es el preu que acompanya. El desglos exacte surt al
+                        resum d'abans de pagar. */}
+                    <span className="text-xs text-white/35">
+                      + {serviceFeeEur(event.price).toFixed(2)} € de gestió
+                    </span>
                   </div>
                   <span className={`rounded-full border px-3 py-1 text-xs ${soldOut ? "border-white/10 text-white/30" : "border-brand/30 bg-brand/10 text-brand-light"}`}>
                     {soldOut ? "Exhaurit" : `${event.spotsLeft} places`}
