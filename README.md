@@ -1,82 +1,209 @@
-# CF Juneda Official Web Application 🔴⚽
+# Web oficial del CF Juneda
 
-Official web application for **Club Futbol Juneda** (@cfjuneda), playing in **Segona Catalana G5**.
+Aplicació web del **Club Futbol Juneda** per a la temporada 2026/27, en què el primer equip competeix a **Segona Catalana, Grup 5**.
 
-> **"Som-hi Rojos!! #AixòÉsJuneda"**
+La web reuneix en un sol lloc la informació esportiva i els serveis digitals del club: calendari de lliga, plantilla, campanya de socis, botiga, esdeveniments, reserves i gestió interna. L'objectiu és que l'afició pugui seguir l'equip i fer gestions habituals des del mòbil, mentre la Junta rep les dades i controla les operacions des d'un panell propi.
 
-This application is built with a modern tech stack to provide club members, fans, and visitors with a high-performance, responsive experience (Mobile First & Desktop). It showcases squad details, handles event bookings, and hosts an online merchandise store.
+## Funcionalitats
 
----
+### Web pública
 
-## 🚀 Key Features
+- Calendari complet de les 30 jornades de lliga, amb pròxim partit i filtres de casa/fora.
+- Plantilla i cos tècnic presentats sobre un camp tàctic interactiu.
+- Alta de socis amb modalitats, validació de DNI/NIE i IBAN i mandat de domiciliació.
+- Botiga oficial amb talla, estoc i personalització de nom i dorsal.
+- Reserva i pagament de dinars, sopars i altres esdeveniments del club.
+- Pàgina de confirmació de compra i consulta de l'estat real de Stripe.
+- Avís legal, política de privacitat i condicions de compra.
+- Disseny responsive, animacions respectuoses amb `prefers-reduced-motion` i navegació accessible per seccions.
 
-*   **Signature Fluid Intro & Hero:**
-    *   Dynamic background preloader featuring organic fluid red smoke animations.
-    *   Smooth crest transition from preloader to the navigation header.
-    *   High-contrast hero section showcasing the team roster and live statistics.
-*   **Esdeveniments & Tiquets (Club Dinners & Events):**
-    *   Interactive events grid showing availability, dates, and prices.
-    *   Seamless booking form with guest details, dietary/intolerance options, and payment ready integrations.
-*   **Botiga Oficial (Merchandise Shop):**
-    *   Showcase of official kits (1st and 2nd jerseys, scarves, merchandise).
-    *   Interactive size selector with options for personalization (name and squad number printing).
-*   **Plantilla & Roster (Squad Display):**
-    *   Dynamic grid filterable by position (Goalkeepers, Defenders, Midfielders, Forwards, Coaching Staff).
-    *   Micro-interactions with player cards to reveal stats and biographies.
-*   **Three Interactive Design Variants:**
-    1.  *Neon Kinetic & Dark Glass:* Neon red borders, glow hover states, glassmorphic bento cards.
-    2.  *Editorial Sports Magazine:* Bold typography, split layouts, and duotone sports photography style.
-    3.  *Minimalist Modern Heritage:* Minimal clean lines, slate backgrounds, and gold details.
+### Panell d'administració
 
----
+La ruta `/admin` permet a la Junta:
 
-## 🛠️ Tech Stack
+- Consultar ingressos, tiquets, comandes, despeses de gestió i altes de socis.
+- Crear, editar i cancel·lar esdeveniments.
+- Crear, editar i ocultar productes de la botiga.
+- Registrar cobraments manuals en efectiu.
+- Corregir l'estat d'operacions i marcar altes com a domiciliades o anul·lades.
+- Exportar dades en CSV i obrir el full mestre de Google Sheets.
 
-*   **Framework:** [Next.js](https://nextjs.org/) (App Router) + [TypeScript](https://www.typescriptlang.org/)
-*   **Styling:** [Tailwind CSS](https://tailwindcss.com/) + [Radix UI](https://www.radix-ui.com/) / [shadcn/ui](https://ui.shadcn.com/)
-*   **Animations:** [Framer Motion](https://www.framer.com/motion/) / [GSAP](https://gsap.com/)
-*   **Icons:** [Lucide React](https://lucide.dev/)
-*   **Payments:** Stripe SDK ready
+El calendari esportiu no es gestiona des del panell: és contingut oficial versionat a `content/matches.json`, de manera que cada canvi queda auditable a Git.
 
----
+## Stack tecnològic
 
-## ⚙️ Development & Installation
+### Interfície
 
-### Prerequisites
+- **Next.js 15** amb App Router per a pàgines, layouts i rutes d'API.
+- **React 19** i **TypeScript**.
+- **Tailwind CSS 3** per al sistema visual responsive.
+- **Framer Motion** per a transicions, entrada inicial i microinteraccions.
+- **Three.js**, **React Three Fiber**, **Drei** i **React Three Postprocessing** per al visor 3D de l'equipació i les escenes de la plantilla.
+- **Lucide React** per a la iconografia.
+- `next/font` amb Syne i Inter.
 
-Make sure you have Node.js (version 18+ recommended) and npm/yarn/pnpm installed.
+### Backend i serveis
 
-### Setup
+- **Route Handlers de Next.js** com a backend. El navegador no accedeix directament a Supabase ni rep la seva clau de servei.
+- **Supabase/PostgreSQL** com a font de veritat per a esdeveniments, productes, compres i altes de socis.
+- **Stripe Checkout** per cobrar tiquets i marxandatge, amb verificació de preus i estoc al servidor.
+- **Webhooks de Stripe** per confirmar pagaments, actualitzar places o estoc i registrar el resultat final.
+- **Google Apps Script** com a pont cap a Google Sheets i Gmail/MailApp: desa files al full de la Junta i envia correus des del compte del club.
+- **Vercel** com a entorn de desplegament previst.
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/Barru23/FC_JUNEDA_Web_Page.git
-    cd FC_JUNEDA_Web_Page
-    ```
+No s'utilitzen Radix UI, shadcn/ui, GSAP, Resend ni l'API directa de Google Sheets en la implementació actual.
 
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    # or
-    pnpm install
-    # or
-    yarn install
-    ```
+## Arquitectura i fluxos
 
-3.  **Run the development server:**
-    ```bash
-    npm run dev
-    # or
-    pnpm dev
-    # or
-    yarn dev
-    ```
-    Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-### Build & Production
-
-To build the application for production:
-```bash
-npm run build
-npm run start
+```text
+Navegador
+   │
+   ├── contingut versionat ──► calendari, plantilla i catàlegs base
+   │
+   └── /api/* (Next.js, servidor)
+          │
+          ├── Supabase ──► dades, preus, estoc i registres
+          ├── Stripe ──► Checkout i confirmació per webhook
+          └── Apps Script ──► Google Sheets + correus del club
 ```
+
+### Compra d'un producte o reserva d'un esdeveniment
+
+1. La interfície carrega el catàleg actiu des de `/api/products` o `/api/events`.
+2. `/api/checkout` valida les dades i torna a consultar a Supabase el preu, l'estat i la disponibilitat. No accepta com a fiable cap preu enviat pel navegador.
+3. El servidor crea una sessió de Stripe Checkout i el navegador hi redirigeix el comprador.
+4. Stripe crida `/api/webhooks/stripe`; la signatura del webhook es verifica abans d'actualitzar res.
+5. La compra queda registrada a Supabase, es descompten places o estoc i s'avisa Apps Script.
+6. Apps Script escriu la fila al full corresponent i envia el correu de confirmació. Si aquest últim pas falla, la compra continua registrada a Supabase i Stripe conserva el rebut.
+
+### Alta de soci
+
+L'alta no cobra en línia. `/api/socis` valida les dades, desa el registre a `soci_registrations` i l'envia al full de la Junta. El DNI i l'IBAN només circulen pel servidor i per les eines internes necessàries per preparar la domiciliació. La Junta activa l'alta quan el cobrament queda gestionat.
+
+### Fonts de dades
+
+- `content/matches.json`: calendari oficial del primer equip.
+- `content/memberships.json`: presentació i modalitats base de socis.
+- `content/events.json`: llavor per a esdeveniments antics; després Supabase és la font viva.
+- Supabase: esdeveniments publicats, productes, inventari, compres i altes.
+- `lib/squad.ts`: plantilla i estructura esportiva.
+
+## Estructura principal
+
+```text
+app/                 Pàgines, panell d'administració i rutes API
+components/          Seccions públiques, modals, botiga i components 3D
+content/             Catàlegs versionats, inclòs el calendari
+lib/                 Domini, validació i integracions de servidor
+public/              Imatges, models 3D i documents públics
+apps-script/Codi.gs  Integració amb Google Sheets i correus
+supabase-schema.sql  Esquema inicial de la base de dades
+```
+
+## Posada en marxa local
+
+### Requisits
+
+- Node.js 18 o superior.
+- Un projecte de Supabase.
+- Un compte de Stripe si es vol provar el checkout.
+- Un full de Google Sheets amb l'Apps Script desplegat si es volen provar registres i correus.
+
+### Instal·lació
+
+```bash
+git clone https://github.com/Barru23/FC_JUNEDA_Web_Page.git
+cd FC_JUNEDA_Web_Page
+npm install
+copy .env.example .env.local
+npm run dev
+```
+
+La web estarà disponible a `http://localhost:3000`.
+
+### Base de dades
+
+Executa `supabase-schema.sql` a l'editor SQL del projecte de Supabase. L'esquema crea les taules següents:
+
+- `events`
+- `products`
+- `membership_tiers`
+- `purchases`
+- `soci_registrations`
+
+També inclou la funció de descompte de places i les polítiques de lectura pública previstes. L'aplicació, però, accedeix a les dades mitjançant les rutes del servidor i la clau de servei.
+
+### Google Apps Script
+
+1. Obre el full mestre de la Junta i entra a **Extensions → Apps Script**.
+2. Copia-hi `apps-script/Codi.gs`.
+3. Substitueix el valor de `TOKEN` per un secret llarg i exclusiu.
+4. Desplega l'script com a aplicació web, executada pel propietari i accessible per a qualsevol persona.
+5. Desa la URL `/exec` a `APPS_SCRIPT_URL` i el mateix secret a `APPS_SCRIPT_TOKEN`.
+6. Després de cada canvi a l'script, publica una versió nova del desplegament.
+
+El token d'Apps Script ha de ser diferent de la contrasenya d'administració.
+
+## Variables d'entorn
+
+| Variable | Ús |
+|---|---|
+| `STRIPE_SECRET_KEY` | Crear i consultar sessions de Stripe al servidor. |
+| `STRIPE_WEBHOOK_SECRET` | Verificar la signatura dels webhooks. |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL del projecte de Supabase. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Accés de servidor a la base de dades; mai no s'ha d'exposar al navegador. |
+| `APPS_SCRIPT_URL` | URL `/exec` del pont de Sheets i correus. |
+| `APPS_SCRIPT_TOKEN` | Secret compartit amb `Codi.gs`. |
+| `NEXT_PUBLIC_MASTER_SHEET_ID` | Activa l'enllaç al full mestre dins l'administració. |
+| `ADMIN_PASSWORD` | Protegeix les rutes administratives actuals. |
+| `NEXT_PUBLIC_SITE_URL` | URL pública usada pel retorn de Stripe; a Vercel pot derivar-se automàticament. |
+
+Copia `.env.example` a `.env.local`, substitueix tots els valors de mostra i no versionis mai `.env.local` ni cap clau real.
+
+## Ordres útils
+
+```bash
+npm run dev       # servidor de desenvolupament
+npm run build     # build de producció
+npm run start     # executar el build
+npm run validate:calendar # validar les 30 jornades i els enfrontaments
+npx tsc --noEmit  # comprovació de tipus
+```
+
+## Manteniment del calendari
+
+Cada registre de `content/matches.json` conté:
+
+```json
+{
+  "round": 1,
+  "date": "2026-09-20",
+  "time": "17:00",
+  "opponent": "Avià",
+  "venue": "away"
+}
+```
+
+- `date` sempre ha d'estar en format ISO `YYYY-MM-DD`.
+- `venue` només pot ser `home` o `away`.
+- Les jornades han d'estar ordenades i no es poden repetir.
+- Els canvis de la Federació s'han d'aplicar al fitxer i publicar amb un desplegament nou.
+- El PDF original és a `public/data/Calendario_26_27.pdf` i queda disponible com a font des de la secció de calendari.
+
+## Qualitat i desplegament
+
+Abans de publicar:
+
+```bash
+npx tsc --noEmit
+npm run validate:calendar
+npm run build
+```
+
+Configura a Vercel les mateixes variables d'entorn, registra el webhook de producció de Stripe i confirma que Apps Script respon a la seva URL `/exec`.
+
+Les limitacions de seguretat, operació i millores pendents estan documentades a [`PENDENTS.md`](./PENDENTS.md). Cal revisar-les abans d'obrir el panell d'administració a un ús ampli o gestionar dades reals a producció.
+
+---
+
+**Som-hi Rojos! Això és Juneda.**

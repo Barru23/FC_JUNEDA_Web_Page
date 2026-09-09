@@ -7,6 +7,7 @@ import { Loader } from "@/components/Loader";
 import { Nav } from "@/components/Nav";
 import { Hero } from "@/components/Hero";
 import { BentoGrid } from "@/components/BentoGrid";
+import { CalendarSection } from "@/components/CalendarSection";
 import { EventsSection } from "@/components/EventsSection";
 import { ShopSection } from "@/components/ShopSection";
 import { SocisSection } from "@/components/SocisSection";
@@ -32,6 +33,7 @@ export default function Home() {
       >
         <Hero />
         <BentoGrid />
+        <CalendarSection />
         <ShopSection />
         <EventsSection />
         <SocisSection />
