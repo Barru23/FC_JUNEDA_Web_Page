@@ -6,6 +6,7 @@ import { CLUB, ADRECA_COMPLETA, CONSERVACIO } from "@/lib/legal";
 export const metadata: Metadata = {
   title: "Política de privacitat — Club Futbol Juneda",
   description: "Com tracta el Club Futbol Juneda les dades personals dels socis i compradors.",
+  alternates: { canonical: "/privacitat" },
 };
 
 export default function PrivacitatPage() {

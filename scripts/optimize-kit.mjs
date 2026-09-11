@@ -3,13 +3,12 @@
 // Strips every trace of the donor "Spain kit" GLB down to bare geometry, then
 // re-compresses it. Run with: node scripts/optimize-kit.mjs
 //
-// Why this exists: public/models/tshirt.glb is a 13.16 MB export of a Spain
+// Why this exists: assets/web-sources/tshirt.glb is a 13.16 MB export of a Spain
 // football kit. Only its MESH (a real cloth-sim t-shirt with genuine fabric
 // folds) is reused — every embedded image, material and the two unused
 // per-vertex colour sets are Spain-specific or dead weight, and are removed
-// here. The club's own colours and printed artwork are applied at runtime by
-// components/KitViewer3D.tsx, which has never used this file's original
-// materials or textures — so none of this is a visual regression.
+// here. This experiment is kept as source material but is not served publicly;
+// the current shop deliberately uses the faster 2D product viewer.
 //
 // Source primitives (inspected via a raw GLB JSON-chunk dump, not this
 // script): one mesh, 8 primitives sharing 8 materials —
@@ -30,8 +29,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SRC = path.join(__dirname, "..", "public", "models", "tshirt.glb");
-const OUT = path.join(__dirname, "..", "public", "models", "kit-juneda.glb");
+const SRC = path.join(__dirname, "..", "assets", "web-sources", "tshirt.glb");
+const OUT = path.join(__dirname, "..", "assets", "web-sources", "kit-juneda.glb");
 
 // Per-material simplification budget. T-Shirt_Outside is simplified
 // conservatively — those triangles are the visible fabric folds. Inside is
@@ -44,8 +43,8 @@ const SIMPLIFY_BUDGET = {
   "Material.002": { ratio: 0.5, error: 0.015 }, // gold accent
 };
 
-// Primitives that only exist to carry the two Spain-specific logo images —
-// MATERIAL_CONFIG in KitViewer3D.tsx already force-hides these by name.
+// Primitives that only exist to carry the two Spain-specific logo images and
+// therefore are not part of the reusable cloth geometry.
 const HIDDEN_LOGO_MATERIALS = new Set(["Empty", "Empty.002"]);
 
 async function main() {
@@ -73,9 +72,8 @@ async function main() {
     }
   }
 
-  // 2. Every remaining material gets its textures cleared — the app always
-  // supplies its own MeshPhysicalMaterial at runtime (KitViewer3D.tsx), so
-  // no texture reference here is ever read. This also detaches the last
+  // 2. Every remaining material gets its donor textures cleared so this
+  // archived experiment contains only reusable geometry. This also detaches the last
   // material still pointing at an embedded image (T-Shirt_Outside's
   // specular-color map), so prune() can drop the images below.
   for (const mat of root.listMaterials()) {

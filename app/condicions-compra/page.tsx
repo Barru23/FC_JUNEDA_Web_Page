@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "Condicions de compra — Club Futbol Juneda",
   description:
     "Condicions de contractació de les entrades, el material esportiu i les quotes de soci del Club Futbol Juneda.",
+  alternates: { canonical: "/condicions-compra" },
 };
 
 export default function CondicionsPage() {

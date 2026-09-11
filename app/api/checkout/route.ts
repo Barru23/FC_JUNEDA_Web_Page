@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { serviceFeeCents } from "@/lib/fees";
+import { getSiteUrl } from "@/lib/site-url";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -12,6 +13,20 @@ function validPrice(value: unknown): value is number {
 
 function metadataValue(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, 500) : "";
+}
+
+type InventoryReservation =
+  | { type: "event"; eventId: string; quantity: number }
+  | { type: "merch"; productId: string; size: string; quantity: number };
+
+async function expireUnusedSession(sessionId: string) {
+  try {
+    await stripe.checkout.sessions.expire(sessionId);
+  } catch (error) {
+    // La sessio no s'ha retornat mai al comprador i caducara igualment. Aquest
+    // error secundari no ha d'amagar el motiu real pel qual no hi ha reserva.
+    console.error(`[Checkout] No s'ha pogut caducar ${sessionId}:`, error);
+  }
 }
 
 // La despesa de gestio es cobra un cop per comanda, no per unitat: la comissio
@@ -35,24 +50,6 @@ function feeLineItem(feeCents: number) {
     },
     quantity: 1,
   };
-}
-
-// Stripe rebutja amb `url_invalid` qualsevol success_url que no sigui una URL
-// publica absoluta -- http://localhost inclos, en mode live. Enlloc de dependre
-// nomes de NEXT_PUBLIC_SITE_URL, que es facil d'oblidar en configurar Vercel,
-// caiem a les variables que Vercel injecta sol. La barra final es treu perque
-// despres hi concatenem "/success".
-function getSiteUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (configured) return configured.replace(/\/+$/, "");
-
-  // Domini de produccio del projecte; en desplegaments de preview, el d'aquell
-  // desplegament concret. Vercel les dona sense esquema.
-  const vercelHost =
-    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
-  if (vercelHost) return `https://${vercelHost.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`;
-
-  return "http://localhost:3000";
 }
 
 // Validacio deliberadament laxa: nomes descarta el que Stripe rebutjaria amb
@@ -110,6 +107,7 @@ export async function POST(req: NextRequest) {
     // ni tornar a consultar la base de dades.
     let netCents = 0;
     let feeCents = 0;
+    let reservation: InventoryReservation | null = null;
     let metadata: Record<string, string> = {
       type,
       buyer_email: metadataValue(email),
@@ -172,7 +170,11 @@ export async function POST(req: NextRequest) {
         quantity: String(ticketQuantity),
         dietary: metadataValue(dietary),
         purchase_type: "event",
+        item_title: metadataValue(eventRow.title),
+        event_date: metadataValue(eventRow.date),
+        event_location: metadataValue(eventRow.location),
       };
+      reservation = { type: "event", eventId: eventRow.id, quantity: ticketQuantity };
     }
 
     // Merchandise. No client-provided or hardcoded fallback price is accepted.
@@ -243,7 +245,9 @@ export async function POST(req: NextRequest) {
         size,
         custom_number: customization ? customNumber : "",
         purchase_type: "merch",
+        item_title: metadataValue(product.name),
       };
+      reservation = { type: "merch", productId: product.id, size, quantity: 1 };
     }
 
     metadata = {
@@ -252,6 +256,9 @@ export async function POST(req: NextRequest) {
       fee_eur: (feeCents / 100).toFixed(2),
     };
 
+    // Stripe exigeix un minim de 30 minuts. En reservem 31 per absorbir els
+    // segons que passen entre calcular la data i crear la sessio.
+    const expiresAt = Math.floor(Date.now() / 1000) + 31 * 60;
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: lineItems,
@@ -263,7 +270,56 @@ export async function POST(req: NextRequest) {
       cancel_url: `${siteUrl}/#${type === "event" ? "esdeveniments" : "botiga"}`,
       metadata,
       locale: "auto",
+      expires_at: expiresAt,
     });
+
+    if (!reservation) {
+      await expireUnusedSession(session.id);
+      throw new Error("No s'ha pogut determinar l'inventari del checkout");
+    }
+
+    // La URL nomes surt del servidor quan la reserva atomica ja ha restat
+    // places/estoc. Si dos compradors intenten agafar l'ultima unitat, nomes
+    // una de les dues transaccions pot retornar true.
+    const supabase = getSupabaseAdmin();
+    const reservationResult =
+      reservation.type === "event"
+        ? await supabase.rpc("reserve_event_checkout", {
+            p_session_id: session.id,
+            p_event_id: reservation.eventId,
+            p_quantity: reservation.quantity,
+            p_expires_at: new Date(expiresAt * 1000).toISOString(),
+          })
+        : await supabase.rpc("reserve_merch_checkout", {
+            p_session_id: session.id,
+            p_product_id: reservation.productId,
+            p_size: reservation.size,
+            p_quantity: reservation.quantity,
+            p_expires_at: new Date(expiresAt * 1000).toISOString(),
+          });
+
+    if (reservationResult.error) {
+      await expireUnusedSession(session.id);
+      throw new Error(`No s'ha pogut reservar l'inventari: ${reservationResult.error.message}`);
+    }
+    if (reservationResult.data !== true) {
+      await expireUnusedSession(session.id);
+      return NextResponse.json(
+        {
+          error:
+            reservation.type === "event"
+              ? "Ja no hi ha prou places disponibles"
+              : "Aquesta talla s'acaba d'esgotar",
+        },
+        { status: 409 },
+      );
+    }
+
+    if (!session.url) {
+      await expireUnusedSession(session.id);
+      await supabase.rpc("release_checkout_reservation", { p_session_id: session.id });
+      throw new Error("Stripe no ha retornat cap URL de pagament");
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (err) {

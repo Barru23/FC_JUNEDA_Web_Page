@@ -161,6 +161,7 @@ export function SocisSection() {
                   }}
                   whileHover={{ y: -3 }}
                   whileTap={{ scale: 0.98 }}
+                  aria-pressed={isSelected}
                   className={`relative flex flex-col justify-between text-left p-5 rounded-2xl border transition-all duration-300 ${
                     isSelected
                       ? "border-brand bg-brand/10 shadow-[0_0_32px_rgba(225,6,0,0.35)] ring-1 ring-brand"
@@ -285,7 +286,7 @@ export function SocisSection() {
             className="lg:col-span-7 flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/[0.03] p-7 md:p-8 backdrop-blur-md"
           >
             {done ? (
-              <div className="flex flex-col items-start gap-4 py-6">
+              <div className="flex flex-col items-start gap-4 py-6" role="status" aria-live="polite">
                 <div className="flex h-14 w-14 items-center justify-center rounded-full border border-brand/40 bg-brand/15 text-brand">
                   <Check size={26} strokeWidth={3} />
                 </div>
@@ -454,7 +455,11 @@ export function SocisSection() {
               </div>
 
               {error && (
-                <div className="rounded-xl border border-red-500/30 bg-red-500/15 p-4 text-xs text-red-300">
+                <div
+                  className="rounded-xl border border-red-500/30 bg-red-500/15 p-4 text-xs text-red-300"
+                  role="alert"
+                  aria-live="assertive"
+                >
                   ⚠️ {error}
                 </div>
               )}
@@ -462,6 +467,7 @@ export function SocisSection() {
               <button
                 type="submit"
                 disabled={submitting || !potEnviar}
+                aria-busy={submitting}
                 className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-brand py-4 font-display text-sm font-black uppercase tracking-widest text-white transition-all hover:scale-[1.01] hover:shadow-[0_0_30px_rgba(225,6,0,0.6)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {submitting ? (
@@ -526,11 +532,11 @@ function FormField({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-white/50">
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-white/50">
         {label}
-      </label>
+      </span>
       {children}
-    </div>
+    </label>
   );
 }

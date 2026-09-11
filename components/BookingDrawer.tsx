@@ -138,8 +138,9 @@ export function BookingDrawer({
           {/* Step 1: Tiquets */}
           {step === 1 && (
             <div className="flex flex-col gap-5">
-              <Field label="Nom del convidat principal">
+              <Field label="Nom del convidat principal" htmlFor="booking-name">
                 <input
+                  id="booking-name"
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
                   placeholder="Nom i cognoms"
@@ -201,8 +202,9 @@ export function BookingDrawer({
           {/* Step 3: Contacte */}
           {step === 3 && (
             <div className="flex flex-col gap-5">
-              <Field label="Correu electrònic">
+              <Field label="Correu electrònic" htmlFor="booking-email">
                 <input
+                  id="booking-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -211,8 +213,9 @@ export function BookingDrawer({
                 />
                 <p className="text-xs text-white/35">Rebràs la confirmació de reserva per correu</p>
               </Field>
-              <Field label="Telèfon (opcional)">
+              <Field label="Telèfon (opcional)" htmlFor="booking-phone">
                 <input
+                  id="booking-phone"
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -265,7 +268,11 @@ export function BookingDrawer({
                 Seràs redirigit a la plataforma de pagament segur de Stripe. 🔒
               </p>
               {error && (
-                <p className="rounded-lg bg-red-500/15 border border-red-500/30 px-4 py-3 text-xs text-red-400">
+                <p
+                  className="rounded-lg bg-red-500/15 border border-red-500/30 px-4 py-3 text-xs text-red-400"
+                  role="alert"
+                  aria-live="assertive"
+                >
                   ⚠️ {error}
                 </p>
               )}
@@ -292,6 +299,7 @@ export function BookingDrawer({
               (step === 3 && !email) ||
               (step === 4 && !potPagar)
             }
+            aria-busy={loading}
             className="flex-1 rounded-lg bg-brand py-3 text-sm font-semibold uppercase tracking-wide text-white disabled:opacity-40 flex items-center justify-center gap-2"
           >
             {loading ? (
@@ -306,10 +314,24 @@ export function BookingDrawer({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  htmlFor,
+}: {
+  label: string;
+  children: React.ReactNode;
+  htmlFor?: string;
+}) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs uppercase tracking-[0.1em] text-white/40">{label}</span>
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className="text-xs uppercase tracking-[0.1em] text-white/40">
+          {label}
+        </label>
+      ) : (
+        <span className="text-xs uppercase tracking-[0.1em] text-white/40">{label}</span>
+      )}
       {children}
     </div>
   );

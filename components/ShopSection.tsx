@@ -330,6 +330,7 @@ export function ShopSection() {
                 </div>
                 <button
                   onClick={() => setCheckoutModalOpen(false)}
+                  aria-label="Tancar la comanda"
                   className="rounded-full border border-white/10 p-2 text-white/50 hover:text-white"
                 >
                   <X size={16} />
@@ -364,10 +365,11 @@ export function ShopSection() {
 
               <form onSubmit={handleProcessCheckout} className="flex flex-col gap-3.5">
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-white/50 mb-1">
+                  <label htmlFor="shop-buyer-name" className="block text-[11px] font-bold uppercase tracking-wider text-white/50 mb-1">
                     Nom i cognoms *
                   </label>
                   <input
+                    id="shop-buyer-name"
                     type="text"
                     required
                     value={buyerName}
@@ -378,10 +380,11 @@ export function ShopSection() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-white/50 mb-1">
+                  <label htmlFor="shop-buyer-email" className="block text-[11px] font-bold uppercase tracking-wider text-white/50 mb-1">
                     Correu electrònic *
                   </label>
                   <input
+                    id="shop-buyer-email"
                     type="email"
                     required
                     value={buyerEmail}
@@ -393,10 +396,11 @@ export function ShopSection() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-white/50 mb-1">
+                  <label htmlFor="shop-buyer-phone" className="block text-[11px] font-bold uppercase tracking-wider text-white/50 mb-1">
                     Telèfon (opcional)
                   </label>
                   <input
+                    id="shop-buyer-phone"
                     type="tel"
                     value={buyerPhone}
                     onChange={(e) => setBuyerPhone(e.target.value)}
@@ -419,7 +423,11 @@ export function ShopSection() {
                 </ConsentCheckbox>
 
                 {error && (
-                  <div className="rounded-lg bg-red-500/15 border border-red-500/30 px-3.5 py-2 text-xs text-red-400">
+                  <div
+                    className="rounded-lg bg-red-500/15 border border-red-500/30 px-3.5 py-2 text-xs text-red-400"
+                    role="alert"
+                    aria-live="assertive"
+                  >
                     ⚠️ {error}
                   </div>
                 )}
@@ -435,6 +443,7 @@ export function ShopSection() {
                   <button
                     type="submit"
                     disabled={loading || !buyerName || !buyerEmail || (customize && !number.trim()) || selectedSizeOutOfStock || !acceptaCondicions}
+                    aria-busy={loading}
                     className="flex-1 rounded-xl bg-brand py-3 text-xs font-extrabold uppercase tracking-widest text-white transition-all hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2"
                   >
                     {loading ? (

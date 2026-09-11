@@ -31,7 +31,7 @@
 var TOKEN = 'CANVIA_EM_PER_UNA_CONTRASENYA_LLARGA';
 
 // Adreça del club que apareix als correus com a contacte.
-var CONTACTE = 'joventjunedenc@gmail.com';
+var CONTACTE = 'junedaclubfutbol@gmail.com';
 
 // Escut del club per a la capçalera dels correus. S'adjunta al missatge (no
 // s'enllaça), perquè molts clients bloquegen les imatges remotes i el logo

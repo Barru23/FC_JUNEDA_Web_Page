@@ -1,11 +1,10 @@
 // scripts/optimize-kit-photos.mjs
 //
 // The Gemini-generated studio photos of the real jersey
-// (public/data/Gemini_Generated_Image_*.jpg) are 1856x2274 and ~2.3 MB each —
+// (assets/web-sources/Gemini_Generated_Image_*.jpg) are 1856x2274 and ~2.3 MB each —
 // far larger than a product-shot viewer ever displays them at. This resizes
 // to a sensible max width and re-encodes as JPEG at a web-friendly quality,
-// writing public/data/kit-front.jpg / kit-back.jpg. The Gemini originals are
-// left untouched as source material.
+// writing public/data/kit-front.jpg / kit-back.jpg. Originals stay private.
 //
 // Run with: node scripts/optimize-kit-photos.mjs
 
@@ -15,7 +14,8 @@ import { fileURLToPath } from "node:url";
 import { statSync } from "node:fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "public", "data");
+const SOURCE_DIR = path.join(__dirname, "..", "assets", "web-sources");
+const OUTPUT_DIR = path.join(__dirname, "..", "public", "data");
 
 const MAX_WIDTH = 1200;
 const JPEG_QUALITY = 82;
@@ -26,8 +26,8 @@ const SOURCES = [
 ];
 
 for (const { src, out } of SOURCES) {
-  const srcPath = path.join(DATA_DIR, src);
-  const outPath = path.join(DATA_DIR, out);
+  const srcPath = path.join(SOURCE_DIR, src);
+  const outPath = path.join(OUTPUT_DIR, out);
 
   await sharp(srcPath)
     .resize({ width: MAX_WIDTH, withoutEnlargement: true })

@@ -77,6 +77,29 @@ CREATE TABLE IF NOT EXISTS purchases (
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Reserves temporals de Stripe Checkout. L'estoc o les places es descompten
+-- abans de donar la URL de pagament al comprador i es recuperen si la sessio
+-- caduca o si falla un metode de pagament asincron. La clau primaria fa que
+-- tots els webhooks siguin idempotents per sessio.
+CREATE TABLE IF NOT EXISTS checkout_reservations (
+  stripe_session_id TEXT PRIMARY KEY,
+  purchase_type     TEXT NOT NULL CHECK (purchase_type IN ('event', 'merch')),
+  event_id          UUID REFERENCES events(id),
+  product_id        UUID REFERENCES products(id),
+  size              TEXT,
+  quantity          INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
+  status            TEXT NOT NULL DEFAULT 'reserved'
+                    CHECK (status IN ('reserved', 'completed', 'released')),
+  expires_at        TIMESTAMPTZ NOT NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (
+    (purchase_type = 'event' AND event_id IS NOT NULL AND product_id IS NULL AND size IS NULL)
+    OR
+    (purchase_type = 'merch' AND product_id IS NOT NULL AND event_id IS NULL AND size IS NOT NULL)
+  )
+);
+
 -- Inscripcions de soci
 -- Els socis NO paguen per la web: omplen el formulari i la Junta fa la
 -- domiciliacio a ma. Per aixo aquesta taula viu a part de `purchases`, que
@@ -143,6 +166,8 @@ CREATE INDEX IF NOT EXISTS idx_purchases_event   ON purchases(event_id) WHERE pu
 CREATE INDEX IF NOT EXISTS idx_purchases_type    ON purchases(purchase_type);
 CREATE INDEX IF NOT EXISTS idx_purchases_status  ON purchases(payment_status);
 CREATE INDEX IF NOT EXISTS idx_purchases_created ON purchases(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_checkout_reservations_expiry
+  ON checkout_reservations(expires_at) WHERE status = 'reserved';
 
 -- ─── RPC: descompte atòmic de places ─────────────────────────────────────────
 -- El webhook de Stripe crida aquesta funció quan es confirma un pagament.
@@ -172,6 +197,289 @@ $$;
 -- "permission denied for function decrement_spots".
 REVOKE ALL ON FUNCTION decrement_spots(UUID, INT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION decrement_spots(UUID, INT) TO service_role;
+
+-- ─── RPC: reserves atomiques de checkout ────────────────────────────────────
+CREATE OR REPLACE FUNCTION reserve_event_checkout(
+  p_session_id TEXT,
+  p_event_id UUID,
+  p_quantity INT,
+  p_expires_at TIMESTAMPTZ
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_existing_status TEXT;
+  v_remaining INT;
+  v_event_status TEXT;
+BEGIN
+  IF p_session_id IS NULL OR p_session_id = '' OR p_quantity < 1 THEN
+    RETURN FALSE;
+  END IF;
+
+  SELECT status INTO v_existing_status
+    FROM checkout_reservations
+   WHERE stripe_session_id = p_session_id;
+  IF FOUND THEN
+    RETURN v_existing_status IN ('reserved', 'completed');
+  END IF;
+
+  SELECT spots_remaining, status
+    INTO v_remaining, v_event_status
+    FROM events
+   WHERE id = p_event_id
+   FOR UPDATE;
+
+  IF NOT FOUND OR v_event_status <> 'active' OR v_remaining < p_quantity THEN
+    RETURN FALSE;
+  END IF;
+
+  UPDATE events
+     SET spots_remaining = spots_remaining - p_quantity,
+         status = CASE WHEN spots_remaining - p_quantity = 0 THEN 'sold_out' ELSE status END
+   WHERE id = p_event_id;
+
+  INSERT INTO checkout_reservations (
+    stripe_session_id, purchase_type, event_id, quantity, expires_at
+  ) VALUES (
+    p_session_id, 'event', p_event_id, p_quantity, p_expires_at
+  );
+
+  RETURN TRUE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION reserve_merch_checkout(
+  p_session_id TEXT,
+  p_product_id UUID,
+  p_size TEXT,
+  p_quantity INT,
+  p_expires_at TIMESTAMPTZ
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_existing_status TEXT;
+  v_stock JSONB;
+  v_product_status TEXT;
+  v_available INT;
+BEGIN
+  IF p_session_id IS NULL OR p_session_id = '' OR p_size IS NULL OR p_size = '' OR p_quantity < 1 THEN
+    RETURN FALSE;
+  END IF;
+
+  SELECT status INTO v_existing_status
+    FROM checkout_reservations
+   WHERE stripe_session_id = p_session_id;
+  IF FOUND THEN
+    RETURN v_existing_status IN ('reserved', 'completed');
+  END IF;
+
+  SELECT stock, status
+    INTO v_stock, v_product_status
+    FROM products
+   WHERE id = p_product_id
+   FOR UPDATE;
+
+  IF NOT FOUND OR v_product_status <> 'active' THEN
+    RETURN FALSE;
+  END IF;
+
+  v_available := COALESCE((v_stock ->> p_size)::INT, 0);
+  IF v_available < p_quantity THEN
+    RETURN FALSE;
+  END IF;
+
+  UPDATE products
+     SET stock = jsonb_set(
+       COALESCE(stock, '{}'::JSONB),
+       ARRAY[p_size],
+       to_jsonb(v_available - p_quantity),
+       TRUE
+     )
+   WHERE id = p_product_id;
+
+  INSERT INTO checkout_reservations (
+    stripe_session_id, purchase_type, product_id, size, quantity, expires_at
+  ) VALUES (
+    p_session_id, 'merch', p_product_id, p_size, p_quantity, p_expires_at
+  );
+
+  RETURN TRUE;
+END;
+$$;
+
+-- Retorna l'estoc/les places exactament una vegada. Els estats cancelled/past
+-- dels esdeveniments no es reactiven; nomes es recupera sold_out, que pot haver
+-- estat causat per aquesta mateixa reserva.
+CREATE OR REPLACE FUNCTION release_checkout_reservation(p_session_id TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_res checkout_reservations%ROWTYPE;
+  v_stock JSONB;
+  v_available INT;
+BEGIN
+  SELECT * INTO v_res
+    FROM checkout_reservations
+   WHERE stripe_session_id = p_session_id
+   FOR UPDATE;
+
+  IF NOT FOUND OR v_res.status <> 'reserved' THEN
+    RETURN FALSE;
+  END IF;
+
+  IF v_res.purchase_type = 'event' THEN
+    UPDATE events
+       SET spots_remaining = LEAST(total_spots, spots_remaining + v_res.quantity),
+           status = CASE WHEN status = 'sold_out' THEN 'active' ELSE status END
+     WHERE id = v_res.event_id;
+  ELSE
+    SELECT stock INTO v_stock
+      FROM products
+     WHERE id = v_res.product_id
+     FOR UPDATE;
+    v_available := COALESCE((v_stock ->> v_res.size)::INT, 0);
+    UPDATE products
+       SET stock = jsonb_set(
+         COALESCE(stock, '{}'::JSONB),
+         ARRAY[v_res.size],
+         to_jsonb(v_available + v_res.quantity),
+         TRUE
+       )
+     WHERE id = v_res.product_id;
+  END IF;
+
+  UPDATE checkout_reservations
+     SET status = 'released', updated_at = NOW()
+   WHERE stripe_session_id = p_session_id;
+  RETURN TRUE;
+END;
+$$;
+
+-- Registra la compra i tanca la reserva dins una sola transaccio. Si arriba un
+-- webhook duplicat retorna la compra existent sense crear una segona fila. La
+-- branca sense reserva conserva compatibilitat amb sessions creades abans del
+-- desplegament: comprova i descompta l'inventari tambe de forma atomica.
+CREATE OR REPLACE FUNCTION finalize_checkout_purchase(
+  p_session_id TEXT,
+  p_payment_id TEXT,
+  p_purchase_type TEXT,
+  p_buyer_name TEXT,
+  p_buyer_email TEXT,
+  p_buyer_phone TEXT,
+  p_event_id UUID,
+  p_quantity INT,
+  p_dietary TEXT,
+  p_product_id UUID,
+  p_size TEXT,
+  p_custom_number TEXT,
+  p_tier_id UUID,
+  p_amount_eur DECIMAL,
+  p_fee_eur DECIMAL,
+  p_payment_method TEXT
+)
+RETURNS TABLE(purchase_id UUID, was_created BOOLEAN)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_res checkout_reservations%ROWTYPE;
+  v_purchase_id UUID;
+  v_stock JSONB;
+  v_available INT;
+  v_event_status TEXT;
+  v_remaining INT;
+BEGIN
+  -- Serialitza qualsevol intent concurrent de finalitzar la mateixa sessio,
+  -- incloses sessions antigues sense fila de reserva.
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_session_id, 0));
+
+  SELECT id INTO v_purchase_id
+    FROM purchases
+   WHERE stripe_session_id = p_session_id;
+  IF FOUND THEN
+    RETURN QUERY SELECT v_purchase_id, FALSE;
+    RETURN;
+  END IF;
+
+  SELECT * INTO v_res
+    FROM checkout_reservations
+   WHERE stripe_session_id = p_session_id
+   FOR UPDATE;
+
+  IF FOUND THEN
+    IF v_res.status = 'released'
+       OR v_res.purchase_type <> p_purchase_type
+       OR (p_purchase_type = 'event' AND (v_res.event_id IS DISTINCT FROM p_event_id OR v_res.quantity IS DISTINCT FROM p_quantity))
+       OR (p_purchase_type = 'merch' AND (v_res.product_id IS DISTINCT FROM p_product_id OR v_res.size IS DISTINCT FROM p_size OR v_res.quantity IS DISTINCT FROM p_quantity)) THEN
+      RAISE EXCEPTION 'invalid or released checkout reservation';
+    END IF;
+  ELSIF p_purchase_type = 'event' THEN
+    SELECT spots_remaining, status INTO v_remaining, v_event_status
+      FROM events WHERE id = p_event_id FOR UPDATE;
+    IF NOT FOUND OR v_event_status <> 'active' OR v_remaining < p_quantity THEN
+      RAISE EXCEPTION 'event is no longer available';
+    END IF;
+    UPDATE events
+       SET spots_remaining = spots_remaining - p_quantity,
+           status = CASE WHEN spots_remaining - p_quantity = 0 THEN 'sold_out' ELSE status END
+     WHERE id = p_event_id;
+  ELSIF p_purchase_type = 'merch' THEN
+    SELECT stock INTO v_stock FROM products WHERE id = p_product_id FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'product not found'; END IF;
+    v_available := COALESCE((v_stock ->> p_size)::INT, 0);
+    IF v_available < p_quantity THEN RAISE EXCEPTION 'product is no longer available'; END IF;
+    UPDATE products
+       SET stock = jsonb_set(stock, ARRAY[p_size], to_jsonb(v_available - p_quantity), TRUE)
+     WHERE id = p_product_id;
+  END IF;
+
+  INSERT INTO purchases (
+    stripe_session_id, stripe_payment_id, purchase_type, buyer_name,
+    buyer_email, buyer_phone, event_id, quantity, dietary, product_id, size,
+    custom_number, tier_id, amount_eur, fee_eur, payment_method, payment_status
+  ) VALUES (
+    p_session_id, p_payment_id, p_purchase_type, p_buyer_name,
+    p_buyer_email, NULLIF(p_buyer_phone, ''), p_event_id, p_quantity,
+    NULLIF(p_dietary, ''), p_product_id, NULLIF(p_size, ''),
+    NULLIF(p_custom_number, ''), p_tier_id, p_amount_eur, p_fee_eur,
+    p_payment_method, 'completed'
+  )
+  ON CONFLICT (stripe_session_id) DO NOTHING
+  RETURNING id INTO v_purchase_id;
+
+  IF v_purchase_id IS NULL THEN
+    SELECT id INTO v_purchase_id FROM purchases WHERE stripe_session_id = p_session_id;
+    RETURN QUERY SELECT v_purchase_id, FALSE;
+    RETURN;
+  END IF;
+
+  UPDATE checkout_reservations
+     SET status = 'completed', updated_at = NOW()
+   WHERE stripe_session_id = p_session_id;
+
+  RETURN QUERY SELECT v_purchase_id, TRUE;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION reserve_event_checkout(TEXT, UUID, INT, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION reserve_merch_checkout(TEXT, UUID, TEXT, INT, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION release_checkout_reservation(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION finalize_checkout_purchase(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, INT, TEXT, UUID, TEXT, TEXT, UUID, DECIMAL, DECIMAL, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION reserve_event_checkout(TEXT, UUID, INT, TIMESTAMPTZ) TO service_role;
+GRANT EXECUTE ON FUNCTION reserve_merch_checkout(TEXT, UUID, TEXT, INT, TIMESTAMPTZ) TO service_role;
+GRANT EXECUTE ON FUNCTION release_checkout_reservation(TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION finalize_checkout_purchase(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, INT, TEXT, UUID, TEXT, TEXT, UUID, DECIMAL, DECIMAL, TEXT) TO service_role;
 
 -- Seed: Membership tiers (Campanya 2026/27 - Oficial image.png)
 INSERT INTO membership_tiers (slug, name, price_eur, season, benefits, status)
@@ -224,7 +532,7 @@ ON CONFLICT (slug) DO NOTHING;
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 
 -- El servidor (service_role) ho gestiona tot i se salta l'RLS.
-GRANT ALL PRIVILEGES ON events, products, membership_tiers, purchases, soci_registrations
+GRANT ALL PRIVILEGES ON events, products, membership_tiers, purchases, checkout_reservations, soci_registrations
   TO service_role;
 
 -- Els catalegs publics son de nomes lectura per als rols del navegador;
@@ -233,6 +541,7 @@ GRANT SELECT ON events, products, membership_tiers TO anon, authenticated;
 
 -- `purchases` conte dades personals i no s'exposa mai fora del servidor.
 REVOKE ALL PRIVILEGES ON purchases FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON checkout_reservations FROM anon, authenticated;
 
 -- `soci_registrations` conte DNI i IBAN: encara mes motiu per no exposar-la.
 REVOKE ALL PRIVILEGES ON soci_registrations FROM anon, authenticated;
@@ -245,6 +554,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE purchases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE checkout_reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE membership_tiers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE soci_registrations ENABLE ROW LEVEL SECURITY;
 

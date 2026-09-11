@@ -4,28 +4,8 @@ import React, { useMemo } from "react";
 import { Html } from "@react-three/drei";
 import { PlayerCromo } from "./PlayerCromo";
 import { CARD_HEIGHT } from "./CromoMesh";
-import type { SquadPlayer, SquadPosition } from "@/lib/squad";
-
-export interface FormationRowConfig {
-  position: SquadPosition;
-  label: string;
-  baseX: number;
-  /** Z offsets for the 4-3-3 shape shown at rest — one slot per card. There's
-   *  no "starter" flag in the data (the club never designated one), so the
-   *  slots are simply filled by ascending dorsal; clicking the line still
-   *  fans out every player regardless of this shape. */
-  formationZPositions: number[];
-}
-
-// Camp horitzontal: les línies s'ordenen d'esquerra (Porters) a dreta
-// (Davanters) al llarg de l'eix X; cada jugador d'una línia es reparteix
-// en l'eix Z (l'amplada del camp).
-export const FORMATION_CONFIG: FormationRowConfig[] = [
-  { position: "Porters", label: "Porteria", baseX: -7.6, formationZPositions: [0] },
-  { position: "Defenses", label: "Defensa", baseX: -4.4, formationZPositions: [-4.2, -1.4, 1.4, 4.2] },
-  { position: "Migcampistes", label: "Mig del Camp", baseX: -0.6, formationZPositions: [-3.2, 0, 3.2] },
-  { position: "Davanters", label: "Davantera", baseX: 3.8, formationZPositions: [-3.5, 0, 3.5] },
-];
+import type { SquadPlayer } from "@/lib/squad";
+import type { FormationRowConfig } from "./formation-config";
 
 // The pitch board (PitchBoard.tsx) is a solid boxGeometry([18, 0.4, 12])
 // centred at y=0, so its grass surface sits at y=0.2. A card's Billboard

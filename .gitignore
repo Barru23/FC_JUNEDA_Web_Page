@@ -41,3 +41,7 @@ Thumbs.db
 # posters (~44 MB). scripts/build-cromos.mjs turns these into the WebP cards
 # in public/cromos/, which are what actually ship.
 /assets/
+
+# Internal federation documents may contain club contact details. Keep local,
+# never publish through Vercel or the public Git repository.
+/documents/

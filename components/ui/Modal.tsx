@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useScrollLock } from "@/lib/hooks/useScrollLock";
 
@@ -22,19 +22,69 @@ export function Modal({
   ariaLabel: string;
 }) {
   useScrollLock(true);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    const focusableSelector =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    const focusables = () =>
+      Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? []).filter(
+        (element) => !element.hasAttribute("hidden") && element.getAttribute("aria-hidden") !== "true",
+      );
+
+    (focusables()[0] ?? dialog)?.focus();
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      const elements = focusables();
+      if (elements.length === 0) {
+        e.preventDefault();
+        dialog?.focus();
+        return;
+      }
+
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, []);
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label={ariaLabel}>
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={ariaLabel}
+      tabIndex={-1}
+      className="outline-none"
+    >
       {children}
     </div>,
     document.body

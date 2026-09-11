@@ -5,6 +5,7 @@ import { CLUB, ADRECA_COMPLETA } from "@/lib/legal";
 export const metadata: Metadata = {
   title: "Avís legal — Club Futbol Juneda",
   description: "Dades identificatives i condicions d'ús del web del Club Futbol Juneda.",
+  alternates: { canonical: "/avis-legal" },
 };
 
 export default function AvisLegalPage() {

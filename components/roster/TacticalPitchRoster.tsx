@@ -1,12 +1,9 @@
 "use client";
 
-import React, { Suspense, useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import dynamic from "next/dynamic";
 import { SectionHeading } from "@/components/EventsSection";
-import { PitchScene } from "./PitchScene";
-import { PitchBoard } from "./PitchBoard";
-import { FormationRow, FORMATION_CONFIG } from "./FormationRow";
-import { StaffBench } from "./StaffBench";
-import { CaptainsRow } from "./CaptainsRow";
+import { FORMATION_CONFIG } from "./formation-config";
 import {
   getAllByPosition,
   getStaff,
@@ -22,6 +19,21 @@ type ActiveRow = SquadPosition | "Staff" | "Capitans" | "Tots" | null;
 
 const CAPTAIN_ORDINALS = ["1r", "2n", "3r", "4t", "5è"];
 
+const Pitch3DView = dynamic(
+  () => import("./Pitch3DView").then((module) => module.Pitch3DView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-4">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-brand border-t-transparent" />
+        <span className="font-display text-xs font-bold uppercase tracking-widest text-white/60">
+          Carregant Camp Tàctic 3D...
+        </span>
+      </div>
+    ),
+  },
+);
+
 export function TacticalPitchRoster() {
   const [activeRow, setActiveRow] = useState<ActiveRow>(null);
   // Starts as "list" regardless of device: WebGL is too heavy for most
@@ -31,6 +43,8 @@ export function TacticalPitchRoster() {
   // manual toggle further down still lets a mobile user opt back into 3D.
   const [viewMode, setViewMode] = useState<"3d" | "list">("list");
   const [detailedId, setDetailedId] = useState<string | null>(null);
+  const [load3D, setLoad3D] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
   const isMobile = useIsMobile();
   const staffMembers = useMemo(() => getStaff(), []);
   const captains = useMemo(() => getCaptains(), []);
@@ -42,6 +56,22 @@ export function TacticalPitchRoster() {
   useEffect(() => {
     setViewMode(isMobile ? "list" : "3d");
   }, [isMobile]);
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section || load3D) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setLoad3D(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [load3D]);
 
   // Toggle: clicking the already-detailed card again closes it (mirrors the
   // click-to-open gesture in CromoMesh.tsx); clicking a different card opens
@@ -74,7 +104,7 @@ export function TacticalPitchRoster() {
   }, [detailedId]);
 
   return (
-    <section id="plantilla" className="relative z-10 px-4 py-20 md:px-10">
+    <section ref={sectionRef} id="plantilla" className="relative z-10 px-4 py-20 md:px-10">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-8">
         <div>
           <SectionHeading label="Plantilla 26/27" title="Tactical 3D Pitch Roster" />
@@ -197,54 +227,22 @@ export function TacticalPitchRoster() {
       {/* ── Mode Camp 3D Principal ── */}
       {viewMode === "3d" ? (
         <div className="relative mx-auto h-[620px] w-full max-w-[100rem] overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#101217]/70 via-[#0a0a0d]/90 to-black p-1 shadow-2xl backdrop-blur-md sm:h-[680px] lg:h-[800px]">
-          <Suspense
-            fallback={
-              <div className="flex h-full w-full flex-col items-center justify-center gap-4">
-                <div className="h-12 w-12 animate-spin rounded-full border-4 border-brand border-t-transparent" />
-                <span className="font-display text-xs font-bold uppercase tracking-widest text-white/60">
-                  Carregant Camp Tàctic 3D...
-                </span>
-              </div>
-            }
-          >
-            <PitchScene onBackgroundClick={() => setDetailedId(null)}>
-              {/* Diorama 3D del camp de futbol */}
-              <PitchBoard />
-
-              {/* Fileres de la plantilla, per línia */}
-              {FORMATION_CONFIG.map((config) => (
-                <FormationRow
-                  key={config.position}
-                  config={config}
-                  allPlayers={rowData[config.position]}
-                  isActive={activeRow === config.position || activeRow === "Tots"}
-                  isDimmed={activeRow !== null && activeRow !== "Tots" && activeRow !== config.position}
-                  onToggleActive={() => toggleRow(config.position)}
-                  detailedId={detailedId}
-                  onToggleDetail={toggleDetail}
-                />
-              ))}
-
-              {/* Cos tècnic centrat a la part superior del camp */}
-              <StaffBench
-                staff={staffMembers}
-                isActive={activeRow === "Staff" || activeRow === "Tots"}
-                isDimmed={activeRow !== null && activeRow !== "Tots" && activeRow !== "Staff"}
-                onToggleActive={() => toggleRow("Staff")}
-                detailedId={detailedId}
-                onToggleDetail={toggleDetail}
-              />
-
-              {/* Alineació de capitans — només quan es selecciona explícitament
-                  ("Tots" ja els mostra dins la seva pròpia línia, evitem duplicar-los) */}
-              <CaptainsRow
-                captains={captains}
-                isActive={activeRow === "Capitans"}
-                detailedId={detailedId}
-                onToggleDetail={toggleDetail}
-              />
-            </PitchScene>
-          </Suspense>
+          {load3D ? (
+            <Pitch3DView
+              activeRow={activeRow}
+              detailedId={detailedId}
+              rowData={rowData}
+              staffMembers={staffMembers}
+              captains={captains}
+              toggleRow={toggleRow}
+              toggleDetail={toggleDetail}
+              closeDetail={() => setDetailedId(null)}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-xs uppercase tracking-widest text-white/40">
+              El camp 3D es carregarà quan arribis a la plantilla
+            </div>
+          )}
 
           {/* Badges flotants informatius a les cantonades */}
           <div className="pointer-events-none absolute bottom-4 left-4 flex flex-wrap items-center gap-2">
