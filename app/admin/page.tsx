@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Ticket, ShoppingBag, Users, Plus, ExternalLink,
   RefreshCw, FileDown, Calendar, Loader2, CheckCircle, Clock,
-  Euro, ChevronRight, X, Pencil, PackageCheck, Landmark, Copy
+  Euro, ChevronRight, X, Pencil, PackageCheck, Landmark, Copy,
+  ImagePlus, Link as LinkIcon, Trash2
 } from "lucide-react";
 import type { DashboardStats, Purchase } from "@/lib/data";
 import type { DbSociRegistration } from "@/lib/supabase";
@@ -27,6 +28,145 @@ function getToken(): string {
 
 function authHeaders() {
   return { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
+}
+
+type UploadedImage = { url: string; path: string };
+
+async function uploadAdminImage(file: File, folder: "events" | "products"): Promise<UploadedImage> {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("folder", folder);
+
+  const res = await fetch("/api/admin/images", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "No s'ha pogut pujar la imatge");
+  return data as UploadedImage;
+}
+
+async function removeUnusedUpload(path: string): Promise<void> {
+  await fetch("/api/admin/images", {
+    method: "DELETE",
+    headers: authHeaders(),
+    body: JSON.stringify({ path }),
+  }).catch(() => undefined);
+}
+
+function ImageField({ value, file, onValueChange, onFileChange, disabled = false }: {
+  value: string;
+  file: File | null;
+  onValueChange: (value: string) => void;
+  onFileChange: (file: File | null) => void;
+  disabled?: boolean;
+}) {
+  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) {
+      setLocalPreview(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setLocalPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  function chooseFile(selected: File | null) {
+    setFileError(null);
+    if (!selected) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(selected.type)) {
+      setFileError("El fitxer ha de ser PNG, JPG o WebP.");
+      return;
+    }
+    if (selected.size > 4 * 1024 * 1024) {
+      setFileError("La imatge ha de pesar menys de 4 MB.");
+      return;
+    }
+    onFileChange(selected);
+  }
+
+  const preview = localPreview ?? value.trim();
+
+  return (
+    <div>
+      <label className="label">Imatge</label>
+      <input
+        ref={inputRef}
+        id={inputId}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="sr-only"
+        disabled={disabled}
+        onChange={(e) => chooseFile(e.target.files?.[0] ?? null)}
+      />
+      <label
+        htmlFor={inputId}
+        onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragOver={(e) => e.preventDefault()}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          if (!disabled) chooseFile(e.dataTransfer.files?.[0] ?? null);
+        }}
+        className={`flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-4 py-4 transition-colors ${
+          dragging ? "border-brand bg-brand/10" : "border-white/15 bg-black/20 hover:border-brand/60"
+        } ${disabled ? "pointer-events-none opacity-50" : ""}`}
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
+          <ImagePlus size={20} />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-white">
+            {file ? file.name : "Selecciona o arrossega una imatge"}
+          </span>
+          <span className="block text-[11px] text-white/40">PNG, JPG o WebP · màxim 4 MB</span>
+        </span>
+      </label>
+
+      {fileError && <p className="mt-1.5 text-xs text-red-400">{fileError}</p>}
+
+      {preview && (
+        <div className="relative mt-2 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview} alt="Previsualització" className="h-32 w-full object-contain" />
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              onFileChange(null);
+              onValueChange("");
+              if (inputRef.current) inputRef.current.value = "";
+            }}
+            className="absolute right-2 top-2 flex items-center gap-1 rounded-lg bg-black/80 px-2 py-1 text-[11px] text-white/80 hover:text-white disabled:opacity-50"
+          >
+            <Trash2 size={12} /> Eliminar
+          </button>
+        </div>
+      )}
+
+      <details className="mt-2">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] text-white/40 hover:text-white/70">
+          <LinkIcon size={12} /> Utilitzar un enllaç extern
+        </summary>
+        <input
+          className="mt-2 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-brand"
+          type="url"
+          value={file ? "" : value}
+          disabled={disabled || !!file}
+          onChange={(e) => { onFileChange(null); onValueChange(e.target.value); }}
+          placeholder="https://..."
+        />
+      </details>
+    </div>
+  );
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
@@ -180,6 +320,7 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
     spots_remaining: event ? String(event.spots_remaining) : "",
     status: event?.status ?? "active",
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -189,11 +330,13 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
     e.preventDefault();
     setLoading(true);
     setError(null);
+    let uploadedImage: UploadedImage | null = null;
     try {
+      if (imageFile) uploadedImage = await uploadAdminImage(imageFile, "events");
       const payload: Record<string, unknown> = {
         title: form.title, description: form.description, event_type: form.event_type,
         date: form.date, location: form.location, menu: form.menu,
-        image_url: form.image_url.trim() || null,
+        image_url: uploadedImage?.url ?? (form.image_url.trim() || null),
         price_eur: parseFloat(form.price_eur), total_spots: parseInt(form.total_spots),
       };
       if (isEdit) {
@@ -210,6 +353,7 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
       if (!res.ok) throw new Error(data.error);
       onSaved();
     } catch (err: unknown) {
+      if (uploadedImage) await removeUnusedUpload(uploadedImage.path);
       setError(err instanceof Error ? err.message : "Error");
     } finally {
       setLoading(false);
@@ -257,12 +401,13 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
             <input className={inputCls} value={form.menu} onChange={e => set("menu", e.target.value)} placeholder="Menú 3 plats + postres + vi" />
           </div>
           <div className="sm:col-span-2">
-            <label className="label">URL de la imatge</label>
-            <input className={inputCls} value={form.image_url} onChange={e => set("image_url", e.target.value)} placeholder="https://..." />
-            {form.image_url.trim() && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={form.image_url.trim()} alt="" className="mt-2 h-24 w-full rounded-lg object-cover" onError={(e) => (e.currentTarget.style.display = "none")} onLoad={(e) => (e.currentTarget.style.display = "block")} />
-            )}
+            <ImageField
+              value={form.image_url}
+              file={imageFile}
+              onValueChange={(value) => set("image_url", value)}
+              onFileChange={setImageFile}
+              disabled={loading}
+            />
           </div>
           <div>
             <label className="label">Preu (€) *</label>
@@ -326,6 +471,7 @@ function ProductModal({ product, onClose, onSaved }: { product?: AdminProduct; o
     status: product?.status ?? "active",
     stock: { ...(product?.stock ?? {}) },
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -336,7 +482,9 @@ function ProductModal({ product, onClose, onSaved }: { product?: AdminProduct; o
     e.preventDefault();
     setLoading(true);
     setError(null);
+    let uploadedImage: UploadedImage | null = null;
     try {
+      if (imageFile) uploadedImage = await uploadAdminImage(imageFile, "products");
       const payload: Record<string, unknown> = {
         name: form.name,
         description: form.description,
@@ -344,7 +492,7 @@ function ProductModal({ product, onClose, onSaved }: { product?: AdminProduct; o
         sizes,
         swatches: parseList(form.swatches),
         customizable: form.customizable,
-        image_url: form.image_url,
+        image_url: uploadedImage?.url ?? form.image_url,
         status: form.status,
         stock: Object.fromEntries(sizes.map((size) => [size, form.stock[size] ?? 0])),
       };
@@ -359,6 +507,7 @@ function ProductModal({ product, onClose, onSaved }: { product?: AdminProduct; o
       if (!res.ok) throw new Error(data.error);
       onSaved();
     } catch (err: unknown) {
+      if (uploadedImage) await removeUnusedUpload(uploadedImage.path);
       setError(err instanceof Error ? err.message : "Error");
     } finally {
       setLoading(false);
@@ -421,12 +570,13 @@ function ProductModal({ product, onClose, onSaved }: { product?: AdminProduct; o
             </div>
           </div>
           <div>
-            <label className="label">URL de la imatge</label>
-            <input className={inputCls} value={form.image_url} onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))} placeholder="https://..." />
-            {form.image_url.trim() && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={form.image_url.trim()} alt="" className="mt-2 h-24 w-full rounded-lg object-contain bg-white/5" />
-            )}
+            <ImageField
+              value={form.image_url}
+              file={imageFile}
+              onValueChange={(value) => setForm((f) => ({ ...f, image_url: value }))}
+              onFileChange={setImageFile}
+              disabled={loading}
+            />
           </div>
           <div>
             <label className="label">Colors (opcional)</label>
