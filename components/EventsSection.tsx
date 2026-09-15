@@ -63,7 +63,7 @@ export function EventsSection() {
                 className="group flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-7 backdrop-blur-sm transition-all duration-300 hover:border-brand/60 hover:shadow-[0_0_36px_rgba(225,6,0,0.24)]"
               >
                 <div
-                  className="h-32 rounded-xl relative overflow-hidden"
+                  className="relative aspect-square w-full overflow-hidden rounded-xl"
                   style={
                     event.imageUrl
                       ? undefined
