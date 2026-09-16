@@ -49,7 +49,7 @@ El calendari esportiu no es gestiona des del panell: és contingut oficial versi
 - **Stripe Checkout** per cobrar tiquets i marxandatge, amb verificació de preus i estoc al servidor.
 - **Webhooks de Stripe** per confirmar pagaments immediats i asíncrons, finalitzar reserves i recuperar inventari de sessions caducades o fallides.
 - **Google Apps Script** com a pont cap a Google Sheets i Gmail/MailApp: desa files al full de la Junta i envia correus des del compte del club.
-- **Vercel** com a entorn de desplegament i domini públic.
+- **Netlify** com a entorn de desplegament i domini públic, amb el runtime oficial de Next.js.
 
 No s'utilitzen Radix UI, shadcn/ui, GSAP, Resend ni l'API directa de Google Sheets en la implementació actual.
 
@@ -165,7 +165,7 @@ El contacte canònic dels textos legals, el peu i els correus és `junedaclubfut
 | `APPS_SCRIPT_TOKEN` | Secret compartit amb `Codi.gs`. |
 | `NEXT_PUBLIC_MASTER_SHEET_ID` | Activa l'enllaç al full mestre dins l'administració. |
 | `ADMIN_PASSWORD` | Protegeix les rutes administratives actuals. |
-| `NEXT_PUBLIC_SITE_URL` | URL pública usada pel retorn de Stripe; a Vercel pot derivar-se automàticament. |
+| `NEXT_PUBLIC_SITE_URL` | URL pública usada pel retorn de Stripe; a Netlify pot derivar-se de `URL`, però es declara explícitament. |
 
 Copia `.env.example` a `.env.local`, substitueix tots els valors de mostra i no versionis mai `.env.local` ni cap clau real.
 
@@ -209,7 +209,7 @@ npm run validate:calendar
 npm run build
 ```
 
-Configura a Vercel les mateixes variables d'entorn, registra el webhook de producció de Stripe i confirma que Apps Script respon a la seva URL `/exec`.
+Configura a Netlify les mateixes variables d'entorn, registra el webhook de producció de Stripe apuntant al domini de Netlify i confirma que Apps Script respon a la seva URL `/exec`. El procés complet de migració i la llista de comprovació són a [`MIGRACIO_NETLIFY.md`](./MIGRACIO_NETLIFY.md).
 
 El webhook de Stripe ha d'escoltar aquests quatre esdeveniments:
 

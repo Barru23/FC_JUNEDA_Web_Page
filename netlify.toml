@@ -1,0 +1,29 @@
+# Configuracio de desplegament a Netlify.
+#
+# El runtime de Next.js (@netlify/plugin-nextjs) s'instal-la sol als projectes
+# nous, pero el declarem aqui perque el desplegament no depengui de la
+# deteccio automatica. No en fixem la versio: Netlify recomana deixar que cada
+# build faci servir l'ultima, que dona suport a Next.js 13.5 endavant.
+#
+# Les capcaleres de seguretat i els X-Robots-Tag segueixen vivint a
+# next.config.mjs: el runtime les respecta i no s'han de duplicar aqui.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+  # Netlify escaneja el resultat del build i el fa fallar si hi troba el valor
+  # d'alguna variable d'entorn. Les NEXT_PUBLIC_* s'incrusten al paquet del
+  # navegador per disseny, aixi que cal excloure-les una a una.
+  #
+  # NO hi afegeixis mai STRIPE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY,
+  # APPS_SCRIPT_TOKEN, STRIPE_WEBHOOK_SECRET ni ADMIN_PASSWORD, ni desactivis
+  # l'escaneig sencer: si una d'aquestes apareix mai al paquet public, vols que
+  # el build peti.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SITE_URL,NEXT_PUBLIC_MASTER_SHEET_ID"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

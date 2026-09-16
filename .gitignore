@@ -43,5 +43,5 @@ Thumbs.db
 /assets/
 
 # Internal federation documents may contain club contact details. Keep local,
-# never publish through Vercel or the public Git repository.
+# never publish through Netlify or the public Git repository.
 /documents/
