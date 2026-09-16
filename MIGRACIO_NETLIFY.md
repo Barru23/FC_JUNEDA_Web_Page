@@ -52,7 +52,7 @@ valors reals de producció (els que ara tens a Vercel i a `.env.local`):
 | Variable | Valor | Nota |
 |---|---|---|
 | `STRIPE_SECRET_KEY` | El mateix que a Vercel | Marca-la com a *secret* |
-| `STRIPE_WEBHOOK_SECRET` | **Valor nou** | Surt al pas 4, deixa-la buida de moment |
+| `STRIPE_WEBHOOK_SECRET` | **Valor nou** | Surt al pas 5, deixa-la buida de moment |
 | `NEXT_PUBLIC_SUPABASE_URL` | El mateix que a Vercel | |
 | `SUPABASE_SERVICE_ROLE_KEY` | El mateix que a Vercel | Marca-la com a *secret* |
 | `APPS_SCRIPT_URL` | El mateix que a Vercel | |
@@ -71,14 +71,35 @@ valors reals de producció (els que ara tens a Vercel i a `.env.local`):
 1. Llança el desplegament i mira que el build acabi verd.
 2. Netlify assigna una URL tipus `https://random-name-123.netlify.app`.
    Canvia-la a **Site configuration → Change site name** per una de decent,
-   per exemple `fc-juneda`.
+   en el nostre cas `cf-juneda`.
 3. Ara posa aquesta URL definitiva a `NEXT_PUBLIC_SITE_URL` i **torna a
    desplegar** (les variables `NEXT_PUBLIC_*` s'incrusten durant el build; si
    no redesplegues, es queda amb el valor vell).
 4. Comprova a ull: portada, calendari, plantilla amb el camp 3D, botiga i
    esdeveniments. Entra a `/admin` amb la contrasenya.
 
-### 4. Webhook de Stripe
+### 4. Fer el projecte public
+
+Des del juliol de 2026, Netlify crea els projectes nous del pla gratuit com a
+**privats per defecte**: tota peticio sense sessio de Netlify rep un 401 amb una
+redireccio al login, i el bloqueig s'aplica a l'edge, abans d'arribar al codi.
+Aixo afecta *totes* les rutes, incloses les d'API.
+
+Stripe no es pot autenticar a Netlify. Amb el projecte privat, el webhook rebria
+un 401 en el 100% dels intents: el cobrament es faria, pero no es registraria a
+Supabase ni s'enviaria cap correu. **Per tant aixo va abans de la prova, no
+despres.**
+
+A **Project configuration -> General -> Visitor access -> Project visibility**,
+posa-ho a public. Comprova-ho des de fora amb:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}' https://cf-juneda.netlify.app/
+```
+
+Ha de tornar `200`. Si torna `401`, encara es privat.
+
+### 5. Webhook de Stripe
 
 Aquest és **el pas que trenca coses si te'l saltes**: sense ell els pagaments
 es cobrarien però no quedarien registrats a Supabase ni enviarien cap correu.
@@ -89,16 +110,33 @@ de manera que si tots dos processen el mateix esdeveniment no es pot duplicar
 cap compra. Durant la transició, doncs:
 
 1. Al panell de Stripe: **Developers → Webhooks → Add endpoint**.
-2. URL: `https://fc-juneda.netlify.app/api/webhooks/stripe`
+2. URL: `https://cf-juneda.netlify.app/api/webhooks/stripe`
 3. Selecciona exactament aquests quatre esdeveniments:
    - `checkout.session.completed`
    - `checkout.session.async_payment_succeeded`
    - `checkout.session.async_payment_failed`
    - `checkout.session.expired`
 4. Copia el **signing secret** nou (`whsec_...`) a `STRIPE_WEBHOOK_SECRET` a
-   Netlify i torna a desplegar.
+   Netlify.
+5. **Redesplega** (Deploys -> Trigger deploy). A Netlify els canvis de
+   variables no arriben a les funcions fins al desplegament seguent, i fer el
+   projecte public no compta com a build. Saltar-se aixo dona `400 Signatura
+   no valida` a tots els intents.
+6. Verifica-ho amb **Send test webhook** des de la pagina del endpoint, que
+   envia un esdeveniment signat de veritat sense tocar diners ni estoc:
 
-### 5. Prova real abans d'obrir les vendes
+   | Resposta | Significat |
+   |---|---|
+   | `400` amb `Signatura no valida` | Secret erroni o redesplegament pendent |
+   | `500` | Correcte: la signatura ha passat |
+   | `200` | Correcte |
+
+   El `500` es el resultat esperat i es bona senyal. La sessio inventada de
+   l'esdeveniment de prova no te cap reserva associada, aixi que
+   `finalize_checkout_purchase` llanca `event is no longer available` i la ruta
+   retorna 500. L'unica resposta dolenta es el `400` de signatura.
+
+### 6. Prova real abans d'obrir les vendes
 
 Amb una targeta de veritat, no en mode test:
 
@@ -113,14 +151,14 @@ Amb una targeta de veritat, no en mode test:
 Si algun dels punts 3–5 falla, el problema és gairebé segur el webhook: mira
 els intents i les respostes a la pàgina del endpoint al panell de Stripe.
 
-### 6. Domini
+### 7. Domini
 
 Si algun dia compreu domini propi (`cfjuneda.cat` o similar), es configura a
 **Domain management** i llavors cal actualitzar `NEXT_PUBLIC_SITE_URL`, la URL
 del webhook de Stripe i tornar a desplegar. Mentrestant, el subdomini
 `.netlify.app` és gratuït i funciona perfectament.
 
-### 7. Tancar Vercel (només quan tot l'anterior funcioni)
+### 8. Tancar Vercel (només quan tot l'anterior funcioni)
 
 Deixa passar uns dies amb les vendes reals funcionant a Netlify. Després:
 
@@ -135,7 +173,7 @@ Deixa passar uns dies amb les vendes reals funcionant a Netlify. Després:
 ## Marxa enrere
 
 Mentre el projecte de Vercel segueixi viu, tornar-hi és immediat: reactiva el
-webhook antic a Stripe i torna a apuntar-hi el domini. Per això el pas 7 va
+webhook antic a Stripe i torna a apuntar-hi el domini. Per això el pas 8 va
 l'últim i no el primer.
 
 ## Límits del pla gratuït a vigilar
