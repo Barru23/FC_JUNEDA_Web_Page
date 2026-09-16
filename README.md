@@ -218,6 +218,36 @@ El webhook de Stripe ha d'escoltar aquests quatre esdeveniments:
 - `checkout.session.async_payment_failed`
 - `checkout.session.expired`
 
+### Monitoratge
+
+Un monitor d'UptimeRobot consulta `https://cf-juneda.netlify.app/api/events`
+cada 5 minuts. L'objectiu no és només saber si el web respon: **el pla gratuït
+de Supabase pausa els projectes després d'una setmana sense activitat**, i cada
+consulta del monitor compta com a activitat. El risc real és el buit d'estiu,
+quan poden passar set dies sense cap visita.
+
+La ruta escollida no és casual i **no s'ha de canviar per la portada**:
+
+- `/api/events` respon amb `Cache-Control: no-store`, així que cada petició
+  consulta Supabase de veritat en comptes de servir-se de la memòria cau.
+- Falla tancada amb un `503` si Supabase no respon, de manera que el monitor
+  avisa per correu. És l'excepció al punt 10 de [`PENDENTS.md`](./PENDENTS.md),
+  on una avaria pot semblar una llista buida.
+- La portada no serviria: és estàtica, se serveix del CDN i un monitor HTTP no
+  executa JavaScript, així que no arribaria mai a la base de dades. Un
+  `/#esdeveniments` encara menys, perquè el fragment posterior a `#` no
+  s'envia al servidor.
+
+Un sol monitor cobreix els dos riscos alhora: si cau Netlify, també falla.
+
+Quan salti l'alerta, comprova-ho en aquest ordre: si el projecte de Supabase
+està pausat (el cas més probable i el de solució més fàcil, amb **Restore
+project** al seu panell), si hi ha hagut un desplegament recent que hagi
+trencat res, i l'estat de Netlify.
+
+El cost en quota és petit: unes 8.640 invocacions de funció al mes, de les
+125.000 que inclou el pla gratuït de Netlify.
+
 ### Revisió anual de conservació de dades
 
 No hi ha cap esborrat automàtic, per evitar una eliminació irreversible per error. Un cop l'any, una persona de la Junta ha de:
