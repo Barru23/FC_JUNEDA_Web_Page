@@ -6,6 +6,8 @@ import { POST as signup } from "../app/api/socis/route";
 import { POST as login } from "../app/api/admin/login/route";
 import { isAdminAuthenticated, revokeAdminSession } from "../lib/admin-auth";
 import { clientAddress } from "../lib/request-security";
+import { GET as products } from "../app/api/products/route";
+import { POST as checkout } from "../app/api/checkout/route";
 
 process.env.NEXT_PUBLIC_SUPABASE_URL="https://database.example";
 process.env.SUPABASE_SERVICE_ROLE_KEY="unit-test-service-key";
@@ -14,6 +16,22 @@ process.env.ADMIN_PASSWORD="local-test-password";
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{"Content-Type":"application/json"}});
 const request=(path:string,body:unknown,origin="https://club.example")=>new NextRequest(`https://club.example${path}`,{method:"POST",headers:{origin,"Content-Type":"application/json"},body:JSON.stringify(body)});
 const member={nom:"Test local",email:"test@example.com",telefon:"600000000",dni:"12345678Z",iban:"ES9121000418450200051332",tierSlug:"soci",acceptaMandat:true,acceptaCondicions:true};
+
+test("sold-out merchandise is visible but cannot create a checkout, even with stock",async t=>{
+  let queries=0;
+  t.mock.method(globalThis,"fetch",async(input:RequestInfo|URL,init?:RequestInit)=>{
+    const url=new URL(String(input));assert.equal(url.hostname,'database.example');
+    if(url.pathname.includes('consume_request_limit'))return json([{allowed:true,retry_after:0}]);
+    assert.ok(url.pathname.endsWith('/products'));assert.ok(!init?.method || init.method==='GET');
+    queries++;
+    if(!url.searchParams.has('slug'))assert.equal(url.searchParams.get('status'),'in.(active,out_of_stock)');
+    return json([{id:'shirt',slug:'1a-equipacio',status:'out_of_stock',sizes:['M'],stock:{M:10},image_url:null}]);
+  });
+  const catalogue=await products();assert.equal(catalogue.status,200);
+  assert.equal((await catalogue.json())[0].status,'out_of_stock');
+  const rejected=await checkout(request('/api/checkout',{type:'merch',productId:'1a-equipacio',size:'M',guestName:'Test local',email:'test@example.com'}));
+  assert.equal(rejected.status,409);assert.equal(queries,2);
+});
 
 test("membership rejects invented tiers, oversized fields, bots and missing consent without inserting",async t=>{
   let inserts=0;

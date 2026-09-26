@@ -540,7 +540,7 @@ function ProductModal({ product, onClose, onSaved }: { product?: AdminProduct; o
               <label className="label">Estat</label>
               <select className={inputCls} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
                 <option value="active">Actiu</option>
-                <option value="out_of_stock">Exhaurit</option>
+                <option value="out_of_stock">Exhaurit (visible, sense compra)</option>
                 <option value="hidden">Amagat</option>
               </select>
             </div>
@@ -575,6 +575,16 @@ function ProductModal({ product, onClose, onSaved }: { product?: AdminProduct; o
               onFileChange={setImageFile}
               disabled={loading}
             />
+            {product?.slug === "1a-equipacio" && (
+              <div className="mt-2 text-xs leading-relaxed text-white/50">
+                <p>Deixa la imatge buida per mostrar les fotos originals amb els botons Davant i Darrere. Una imatge personalitzada substitueix aquestes dues vistes.</p>
+                {(form.image_url || imageFile) && (
+                  <button type="button" disabled={loading} onClick={() => { setForm(f => ({ ...f, image_url: "" })); setImageFile(null); }} className="mt-2 text-brand hover:underline disabled:opacity-40">
+                    Recuperar fotos Davant i Darrere
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <label className="label">Colors (opcional)</label>

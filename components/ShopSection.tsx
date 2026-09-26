@@ -22,6 +22,7 @@ type Product = {
   customizable: boolean;
   image_url: string | null;
   stock: Record<string, number>;
+  status: "active" | "out_of_stock" | "hidden";
 };
 
 export function ShopSection() {
@@ -87,21 +88,26 @@ export function ShopSection() {
   const total = price + fee;
   const sizes = product?.sizes ?? [];
   const stock = product?.stock ?? {};
-  const selectedSizeOutOfStock = !product || !size || Number(stock[size] ?? 0) <= 0;
+  const productOutOfStock = !product || product.status !== "active" || !sizes.some((s) => Number(stock[s] ?? 0) > 0);
+  const selectedSizeOutOfStock = productOutOfStock || !sizes.includes(size) || Number(stock[size] ?? 0) <= 0;
+
+  useEffect(() => {
+    if (selectedSizeOutOfStock) setCheckoutModalOpen(false);
+  }, [selectedSizeOutOfStock]);
 
   const handleCustomFocus = () => {
     setView("back");
   };
 
   const handleOpenCheckout = () => {
-    if (!product) return;
+    if (selectedSizeOutOfStock) return;
     setError(null);
     setCheckoutModalOpen(true);
   };
 
   const handleProcessCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!buyerEmail || !buyerName) return;
+    if (!buyerEmail || !buyerName || selectedSizeOutOfStock) return;
     if (customize && !number.trim()) return;
 
     setLoading(true);
@@ -203,6 +209,11 @@ export function ShopSection() {
               <h3 className="font-display mt-2 text-3xl font-extrabold text-white md:text-4xl">
                 {name}
               </h3>
+              {productOutOfStock && (
+                <p className="mt-3 inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white/65">
+                  Esgotat · No disponible
+                </p>
+              )}
               <p className="mt-4 text-sm leading-relaxed text-white/60">
                 {description}
               </p>
@@ -227,7 +238,7 @@ export function ShopSection() {
               </span>
               <div className="mt-2.5 flex flex-wrap gap-2">
                 {sizes.map((s) => {
-                  const outOfStock = (stock[s] ?? 1) <= 0;
+                  const outOfStock = productOutOfStock || Number(stock[s] ?? 0) <= 0;
                   return (
                     <button
                       key={s}
@@ -301,7 +312,7 @@ export function ShopSection() {
               className="group relative flex w-full items-center justify-center gap-2 rounded-full bg-brand px-10 py-4 font-display text-sm font-extrabold uppercase tracking-widest text-white transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_24px_rgba(225,6,0,0.6)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:shadow-none sm:w-auto"
             >
               <ShoppingBag size={16} />
-              {selectedSizeOutOfStock ? "Talla esgotada" : "Comprar"}
+              {productOutOfStock ? "Esgotat" : selectedSizeOutOfStock ? "Talla esgotada" : "Comprar"}
             </button>
           </div>
         </div>

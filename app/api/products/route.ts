@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
-// GET /api/products — public list of active products
+// Sold-out products remain visible; only hidden products leave the catalogue.
 export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("products")
     .select("*")
-    .eq("status", "active")
+    .in("status", ["active", "out_of_stock"])
     .order("created_at", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
