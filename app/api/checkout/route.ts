@@ -4,6 +4,7 @@ import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { serviceFeeCents } from "@/lib/fees";
 import { getSiteUrl } from "@/lib/site-url";
+import { limitRequest, readJson, RequestError, sameOrigin } from "@/lib/request-security";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -61,8 +62,11 @@ function validEmail(value: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) return NextResponse.json({ error: "Origen no autoritzat" }, { status: 403 });
   try {
-    const body = await req.json();
+    const limited = await limitRequest(req, "checkout", 15, 15 * 60);
+    if (limited) return limited;
+    const body = await readJson(req);
     const {
       type,
       eventId,
@@ -77,7 +81,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (
-      !["event", "merch"].includes(type) ||
+      typeof type !== "string" || !["event", "merch"].includes(type) ||
       typeof email !== "string" ||
       !email.trim() ||
       typeof guestName !== "string" ||
@@ -243,7 +247,7 @@ export async function POST(req: NextRequest) {
         product_id: product.id,
         product_slug: product.slug,
         size,
-        custom_number: customization ? customNumber : "",
+        custom_number: customization ? metadataValue(customNumber) : "",
         purchase_type: "merch",
         item_title: metadataValue(product.name),
       };
@@ -323,6 +327,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
+    if (err instanceof RequestError) return NextResponse.json({ error: err.message }, { status: err.status });
     // Un 500 opac amaga la causa justament quan mes falta fa saber-la: una
     // clau erronia, un compte de Stripe encara sense activar o un metode de
     // pagament no habilitat es diagnostiquen tots amb el codi que retorna

@@ -32,7 +32,8 @@ function escapeCell(value: CsvValue): string {
     return String(value).replace(".", ",");
   }
 
-  const text = String(value);
+  const raw = String(value);
+  const text = /^[\s\u0000-\u001f]*[=+@-]/.test(raw) ? `'${raw}` : raw;
   const needsQuotes = /[";\n\r]/.test(text) || text !== text.trim();
   return needsQuotes ? `"${text.replace(/"/g, '""')}"` : text;
 }

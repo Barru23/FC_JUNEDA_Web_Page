@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (error) {
-    console.error("[Webhook] Signatura no valida:", error);
+    console.error("[Webhook] Signatura no valida");
     return NextResponse.json({ error: "Signatura no valida" }, { status: 400 });
   }
 

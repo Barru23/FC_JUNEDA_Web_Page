@@ -12,8 +12,10 @@ import type { DashboardStats, Purchase } from "@/lib/data";
 import type { DbSociRegistration } from "@/lib/supabase";
 import { formatIban } from "@/lib/identitat";
 import { getSheetUrl } from "@/lib/sheets-link";
+import { FinanceSummary } from "@/components/admin/FinanceSummary";
 import { Crest } from "@/components/Crest";
 import { Modal } from "@/components/ui/Modal";
+import { eventStatusLabel } from "@/lib/event-status";
 import { downloadCsv } from "@/lib/csv";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -22,12 +24,10 @@ const TYPE_LABELS: Record<string, string> = {
   membership: "Quota de soci",
 };
 
-function getToken(): string {
-  return sessionStorage.getItem("admin_token") ?? "";
-}
+
 
 function authHeaders() {
-  return { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
+  return { "Content-Type": "application/json" };
 }
 
 type UploadedImage = { url: string; path: string };
@@ -39,7 +39,6 @@ async function uploadAdminImage(file: File, folder: "events" | "products"): Prom
 
   const res = await fetch("/api/admin/images", {
     method: "POST",
-    headers: { Authorization: `Bearer ${getToken()}` },
     body,
   });
   const data = await res.json();
@@ -302,7 +301,7 @@ type AdminEvent = {
   id: string; title: string; description?: string | null; event_type?: string;
   date: string; location: string; menu?: string | null; image_url?: string | null;
   price_eur: number; total_spots: number; spots_remaining: number;
-  status: string; sheet_id?: string;
+  status: string; sheet_id?: string; tickets_sold: number; reserved_places: number;
 };
 
 function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: () => void; onSaved: () => void }) {
@@ -317,7 +316,6 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
     price_eur: event ? String(event.price_eur) : "",
     total_spots: event ? String(event.total_spots) : "",
     event_type: event?.event_type ?? "dinner",
-    spots_remaining: event ? String(event.spots_remaining) : "",
     status: event?.status ?? "active",
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -341,7 +339,6 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
       };
       if (isEdit) {
         payload.id = event!.id;
-        payload.spots_remaining = parseInt(form.spots_remaining);
         payload.status = form.status;
       }
       const res = await fetch("/api/admin/events", {
@@ -420,7 +417,7 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
           {isEdit && (
             <div>
               <label className="label">Places disponibles</label>
-              <input className={inputCls} type="number" min="0" max={form.total_spots || undefined} value={form.spots_remaining} onChange={e => set("spots_remaining", e.target.value)} />
+              <p className="py-3 text-sm text-white/60">{event?.spots_remaining} · es calcula automàticament</p>
             </div>
           )}
           {isEdit && (
@@ -428,7 +425,8 @@ function EventModal({ event, onClose, onSaved }: { event?: AdminEvent; onClose: 
               <label className="label">Estat</label>
               <select className={inputCls} value={form.status} onChange={e => set("status", e.target.value)}>
                 <option value="active">Actiu</option>
-                <option value="sold_out">Exhaurit</option>
+                <option value="sold_out" disabled>Exhaurit (automàtic)</option>
+                <option value="closed">Inscripcions tancades</option>
                 <option value="cancelled">Cancel·lat</option>
               </select>
             </div>
@@ -606,6 +604,7 @@ function CashModal({ events, onClose, onCreated }: {
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const requestId = useRef(crypto.randomUUID());
   const [form, setForm] = useState({ purchase_type: "event", buyer_name: "", buyer_email: "", buyer_phone: "", event_id: "", quantity: "1", dietary: "", amount_eur: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -619,7 +618,7 @@ function CashModal({ events, onClose, onCreated }: {
       const res = await fetch("/api/admin/cash", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ ...form, quantity: parseInt(form.quantity), amount_eur: parseFloat(form.amount_eur) }),
+        body: JSON.stringify({ ...form, request_id: requestId.current, quantity: parseInt(form.quantity), amount_eur: parseFloat(form.amount_eur) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -646,8 +645,6 @@ function CashModal({ events, onClose, onCreated }: {
             <label className="label">Tipus</label>
             <select className={inputCls} value={form.purchase_type} onChange={e => set("purchase_type", e.target.value)}>
               <option value="event">Tiquet Esdeveniment</option>
-              <option value="merch">Botiga</option>
-              <option value="membership">Soci/Socia</option>
             </select>
           </div>
           {form.purchase_type === "event" && (
@@ -704,12 +701,14 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [eventModalTarget, setEventModalTarget] = useState<AdminEvent | "new" | null>(null);
   const [productModalTarget, setProductModalTarget] = useState<AdminProduct | "new" | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showCash, setShowCash] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "event" | "merch" | "socis">("all");
   const sheetUrl = getSheetUrl();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     const h = authHeaders();
     try {
       // La pestanya de socis no llegeix `purchases`: una alta de soci no es un
@@ -722,13 +721,16 @@ export default function AdminDashboard() {
         fetch(`/api/admin/purchases${purchaseFilter}`, { headers: h }),
         fetch("/api/admin/socis", { headers: h }),
       ]);
+      const responses=[statsRes,eventsRes,productsRes,purchasesRes,socisRes];
+      if(responses.some(res=>res.status===401)) {window.dispatchEvent(new Event("admin-session-expired"));return;}
+      if(responses.some(res=>!res.ok)) throw new Error("No s'han pogut actualitzar totes les dades. Torna-ho a provar.");
       if (statsRes.ok) setStats(await statsRes.json());
       if (eventsRes.ok) setEvents(await eventsRes.json());
       if (productsRes.ok) setProducts(await productsRes.json());
       if (purchasesRes.ok) setPurchases(await purchasesRes.json());
       if (socisRes.ok) setSocis(await socisRes.json());
     } catch (err) {
-      console.error("Dashboard fetch error:", err);
+      setLoadError(err instanceof Error ? err.message : "No s'han pogut carregar les dades");
     } finally {
       setLoading(false);
     }
@@ -781,7 +783,7 @@ export default function AdminDashboard() {
         p.event?.title ?? p.product?.name ?? p.tier?.name ?? "",
         p.amount_eur,
         p.fee_eur ?? 0,
-        p.payment_method === "cash" ? "Efectiu" : "Targeta (Stripe)",
+        p.payment_method === "cash" ? "Efectiu" : p.payment_method === "bizum" ? "Bizum" : p.payment_method === "card" ? "Targeta" : "Stripe",
         p.payment_status === "completed" ? "Pagat" : p.payment_status,
         new Date(p.created_at).toLocaleDateString("ca-ES"),
       ]),
@@ -828,15 +830,18 @@ export default function AdminDashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
+        {loadError && <p role="alert" className="mb-5 rounded-lg border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200">{loadError}</p>}
+        {!!stats && (stats.notifications_pending>0 || stats.notifications_review>0) && <p className="mb-5 rounded-lg border border-amber-400/30 p-3 text-sm text-amber-200">Sincronitzacions pendents: {stats.notifications_pending}. Per revisar: {stats.notifications_review}.</p>}
+        <FinanceSummary />
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 mb-8">
           <StatCard
             icon={Euro}
-            label="Ingressos Totals"
+            label="Import base de les vendes"
             value={`${stats?.total_revenue?.toFixed(2) ?? "—"} €`}
             sub={
               stats?.fees_collected
-                ? `Net del club · ${stats.fees_collected.toFixed(2)} € de gestió a Stripe`
+                ? `Més ${stats.fees_collected.toFixed(2)} € de gestió cobrats als compradors`
                 : "Pagaments confirmats"
             }
             color="brand"
@@ -866,7 +871,7 @@ export default function AdminDashboard() {
                 <p className="text-sm text-white/30 text-center py-8">Sense esdeveniments. Crea el primer!</p>
               )}
               {events.map((ev) => {
-                const pct = ev.total_spots ? Math.round(((ev.total_spots - ev.spots_remaining) / ev.total_spots) * 100) : 0;
+                const pct = ev.total_spots ? Math.min(100, Math.round((ev.tickets_sold / ev.total_spots) * 100)) : 0;
                 const tabName = ev.sheet_id ?? ev.title;
 
                 return (
@@ -882,7 +887,7 @@ export default function AdminDashboard() {
                       <p className="font-semibold text-sm text-white leading-tight">{ev.title}</p>
                       <div className="ml-2 flex shrink-0 items-center gap-1.5">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${ev.status === "active" ? "bg-green-500/15 text-green-400" : ev.status === "sold_out" ? "bg-brand/15 text-brand" : "bg-white/10 text-white/40"}`}>
-                          {ev.status}
+                          {eventStatusLabel(ev.status)}
                         </span>
                         <button
                           onClick={(e) => { e.stopPropagation(); setEventModalTarget(ev); }}
@@ -896,8 +901,8 @@ export default function AdminDashboard() {
                     </div>
                     <div className="mb-2">
                       <div className="flex justify-between text-xs text-white/40 mb-1">
-                        <span>{ev.total_spots - ev.spots_remaining} venuts</span>
-                        <span>{ev.spots_remaining} disponibles</span>
+                        <span>{ev.tickets_sold} pagats{ev.reserved_places > 0 ? ` + ${ev.reserved_places} pendents` : ""}</span>
+                        <span>{ev.spots_remaining} places lliures</span>
                       </div>
                       <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                         <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${pct}%` }} />

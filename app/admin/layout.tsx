@@ -8,21 +8,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [authenticated, setAuthenticated] = useState(false);
   const [checking, setChecking] = useState(true);
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("admin_auth");
-    if (stored === "true") {
-      setAuthenticated(true);
-    }
-    setChecking(false);
+    sessionStorage.removeItem("admin_auth");
+    sessionStorage.removeItem("admin_token");
+    fetch("/api/admin/session", { cache: "no-store" })
+      .then(res => setAuthenticated(res.ok))
+      .catch(() => setError("No s'ha pogut comprovar la sessió"))
+      .finally(() => setChecking(false));
+    const expired = () => { setAuthenticated(false); setError("La sessió ha caducat. Torna a entrar."); };
+    window.addEventListener("admin-session-expired", expired);
+    return () => window.removeEventListener("admin-session-expired", expired);
   }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setError(false);
+    setError(null);
 
     try {
       const res = await fetch("/api/admin/login", {
@@ -32,14 +36,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       });
 
       if (res.ok) {
-        sessionStorage.setItem("admin_auth", "true");
-        sessionStorage.setItem("admin_token", password.trim());
+        setPassword("");
         setAuthenticated(true);
       } else {
-        setError(true);
+        const data = await res.json();
+        setError(data.error ?? "No s'ha pogut iniciar sessió");
       }
     } catch {
-      setError(true);
+      setError("No s'ha pogut connectar. Torna-ho a provar.");
     } finally {
       setLoading(false);
     }
@@ -77,7 +81,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 error ? "border-red-500/50" : "border-white/10"
               }`}
             />
-            {error && <p className="text-xs text-red-400">Contrasenya incorrecta. Prova amb &apos;admin&apos;.</p>}
+            {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
             <button
               type="submit"
               disabled={!password || loading}
@@ -91,5 +95,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  return <>{children}</>;
+  return <>
+    <div className="bg-carbon px-6 py-2 text-right">
+      <button className="text-xs text-white/60 hover:text-white" onClick={async () => {
+        const res = await fetch("/api/admin/session", { method: "DELETE" });
+        if (res.ok) { setAuthenticated(false); setError(null); }
+        else setError("No s'ha pogut tancar la sessió. Torna-ho a provar.");
+      }}>Tancar sessió</button>
+      {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
+    </div>
+    {children}
+  </>;
 }

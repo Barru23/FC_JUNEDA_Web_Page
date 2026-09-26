@@ -1,84 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
-import { notifyPurchase } from "@/lib/notify";
-
-// POST /api/admin/cash — record a manual cash payment
-export async function POST(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
-
-  const body = await req.json();
-  const { purchase_type, buyer_name, buyer_email, buyer_phone, event_id, product_id, tier_id, quantity, dietary, size, amount_eur } = body;
-
-  if (!purchase_type || !buyer_name || !amount_eur) {
-    return NextResponse.json({ error: "Falten camps obligatoris" }, { status: 400 });
-  }
-
-  const supabase = getSupabaseAdmin();
-  const sessionId = `CASH-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  const now = new Date().toLocaleString("ca-ES", { timeZone: "Europe/Madrid" });
-
-  const { data: purchase, error } = await supabase.from("purchases").insert({
-    stripe_session_id: sessionId,
-    purchase_type,
-    buyer_name,
-    buyer_email: buyer_email ?? "",
-    buyer_phone: buyer_phone ?? null,
-    event_id: event_id ?? null,
-    product_id: product_id ?? null,
-    tier_id: tier_id ?? null,
-    quantity: quantity ?? 1,
-    dietary: dietary ?? null,
-    size: size ?? null,
-    amount_eur,
-    fee_eur: 0,
-    payment_method: "cash",
-    payment_status: "completed",
-  }).select().single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  // El registre al full de la Junta. Els pagaments en efectiu no envien correu:
-  // qui paga en ma ja te el tiquet a la seva i no ha donat necessariament una
-  // adreca valida.
-  let sheet: string | null = null;
-  let row = null as Parameters<typeof notifyPurchase>[0]["row"] | null;
-  const base = {
-    nom: buyer_name,
-    email: buyer_email ?? "",
-    telefon: buyer_phone,
-    preu: amount_eur,
-    metode: "Efectiu 💵",
-    estat: "Pagat ✅",
-    data: now,
-  };
-
-  if (purchase_type === "event" && event_id) {
-    const { data: evt } = await supabase.from("events").select("sheet_id, title").eq("id", event_id).single();
-    if (evt) {
-      sheet = evt.sheet_id || evt.title;
-      row = { ...base, tiquets: quantity ?? 1, dietetica: dietary };
-    }
-  } else if (purchase_type === "merch") {
-    const { data: prod } = product_id
-      ? await supabase.from("products").select("name").eq("id", product_id).single()
-      : { data: null };
-    sheet = "Botiga";
-    row = { ...base, producte: prod?.name ?? "Producte", talla: size, personalitzacio: "Cap" };
-  } else if (purchase_type === "membership") {
-    const { data: tier } = tier_id
-      ? await supabase.from("membership_tiers").select("name, season").eq("id", tier_id).single()
-      : { data: null };
-    sheet = "Socis";
-    row = { ...base, tipusSoci: tier?.name, temporada: tier?.season };
-  }
-
-  if (sheet && row) {
-    const result = await notifyPurchase({ type: purchase_type, sheet, row, email: null });
-    if (result?.ok) {
-      await supabase.from("purchases").update({ sheet_synced: true }).eq("id", purchase.id);
-    }
-  }
-
-  return NextResponse.json(purchase, { status: 201 });
+import { readJson, RequestError } from "@/lib/request-security";
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export async function POST(req:NextRequest) {
+  if(!(await isAdminAuthenticated(req))) return NextResponse.json({error:"No autoritzat"},{status:401});
+  try {
+    const b=await readJson(req);
+    const type=b.purchase_type;
+    const quantity=Number(b.quantity ?? 1),amount=Number(b.amount_eur);
+    if(!["event","merch"].includes(String(type)) || typeof b.request_id!=="string" || !UUID.test(b.request_id)
+      || typeof b.buyer_name!=="string" || !b.buyer_name.trim() || b.buyer_name.length>120
+      || !Number.isInteger(quantity) || quantity<1 || quantity>200 || !Number.isFinite(amount) || amount<=0 || amount>999999) throw new RequestError("Dades de cobrament no valides");
+    const reference=type==="event" ? b.event_id : b.product_id;
+    if(typeof reference!=="string" || !UUID.test(reference)) throw new RequestError("Selecciona un article valid");
+    if(type==="merch" && (typeof b.size!=="string" || b.size.length>40 || quantity!==1)) throw new RequestError("Talla o quantitat no valida");
+    const db=getSupabaseAdmin();
+    const {data,error}=await db.rpc("register_cash_purchase",{p_id:"CASH-"+b.request_id,p_type:type,
+      p_buyer_name:b.buyer_name.trim(),p_buyer_email:typeof b.buyer_email==="string" ? b.buyer_email.slice(0,160):"",
+      p_buyer_phone:typeof b.buyer_phone==="string" ? b.buyer_phone.slice(0,40):"",
+      p_event_id:type==="event" ? reference:null,p_product_id:type==="merch" ? reference:null,
+      p_size:type==="merch" ? b.size:"",p_quantity:quantity,p_amount:Math.round(amount*100)/100,
+      p_dietary:typeof b.dietary==="string" ? b.dietary.slice(0,500):""});
+    if(error) return NextResponse.json({error:"No es pot registrar: comprova les dades, les places i que les vendes estiguin obertes"},{status:409});
+    return NextResponse.json({id:data},{status:201});
+  } catch(error) {return NextResponse.json({error:error instanceof RequestError ? error.message:"No s'ha pogut registrar el cobrament"},{status:error instanceof RequestError ? error.status:503});}
 }

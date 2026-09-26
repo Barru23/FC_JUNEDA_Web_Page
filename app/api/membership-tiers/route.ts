@@ -1,33 +1,21 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getAllActiveMembershipTiers } from "@/lib/memberships";
+import { getMembershipTier } from "@/lib/memberships";
 
 export async function GET() {
-  const catalogue = getAllActiveMembershipTiers();
-
   try {
-    const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from("membership_tiers")
-      .select("*")
-      .eq("status", "active");
-
-    if (!error && data && data.length > 0) {
-      // Merge DB id / live status with catalogue details
-      const merged = catalogue.map((cat) => {
-        const dbRow = data.find((r) => r.slug === cat.slug);
-        return {
-          ...cat,
-          id: dbRow?.id ?? cat.slug,
-          price_eur: dbRow?.price_eur ?? cat.price_eur,
-        };
-      });
-      return NextResponse.json(merged);
-    }
-  } catch (err) {
-    console.warn("[MembershipTiers] Fallback to static catalogue:", err);
+    const { data, error } = await getSupabaseAdmin().from("membership_tiers").select("*").eq("status", "active");
+    if (error) throw error;
+    return NextResponse.json((data ?? []).map(row => {
+      const description = getMembershipTier(row.slug);
+      return { ...description, id: row.id, slug: row.slug, name: row.name,
+        price_eur: Number(row.price_eur), season: row.season, status: row.status,
+        badge: description?.badge ?? row.name, icon: description?.icon ?? "Users",
+        target: description?.target ?? "", description: description?.description ?? "",
+        benefits: description?.benefits ?? (row.benefits ? [row.benefits] : []),
+      };
+    }), { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return NextResponse.json({ error: "No s'han pogut carregar les modalitats. Torna-ho a provar." }, { status: 503 });
   }
-
-  return NextResponse.json(catalogue);
 }
-

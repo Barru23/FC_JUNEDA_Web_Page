@@ -49,7 +49,7 @@ export type DbEvent = {
    *  — les despeses de gestió es calculen a lib/fees.ts. */
   booking_fee_eur?: number;
   sheet_id: string | null;
-  status: "active" | "sold_out" | "cancelled" | "past";
+  status: "active" | "sold_out" | "closed" | "cancelled" | "past";
   created_at: string;
 };
 
@@ -133,6 +133,8 @@ export type DbSociRegistration = {
 };
 
 export type DashboardStats = {
+  notifications_pending: number;
+  notifications_review: number;
   total_revenue: number;
   event_revenue: number;
   merch_revenue: number;

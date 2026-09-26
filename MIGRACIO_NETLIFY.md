@@ -128,28 +128,29 @@ cap compra. Durant la transició, doncs:
    | Resposta | Significat |
    |---|---|
    | `400` amb `Signatura no valida` | Secret erroni o redesplegament pendent |
-   | `500` | Correcte: la signatura ha passat |
+   | `500` | Error de processament; no donar el webhook per verificat |
    | `200` | Correcte |
 
-   El `500` es el resultat esperat i es bona senyal. La sessio inventada de
-   l'esdeveniment de prova no te cap reserva associada, aixi que
-   `finalize_checkout_purchase` llanca `event is no longer available` i la ruta
-   retorna 500. L'unica resposta dolenta es el `400` de signatura.
+   Una signatura acceptada no prova que s'hagi registrat la compra. Cal
+   comprovar un lliurament real amb resposta 200 i la compra corresponent a
+   Supabase. Reenviar una compra ja confirmada no ha de duplicar registres,
+   correus ni descomptar més places. Les proves noves s'han de fer amb Stripe
+   en mode test, una base de dades i un full separats de producció.
 
-### 6. Prova real abans d'obrir les vendes
+### 6. Proves abans d'obrir les vendes
 
-Amb una targeta de veritat, no en mode test:
+Utilitza Stripe en mode test amb Supabase i un full de proves separats:
 
-1. Compra un producte barat o crea un esdeveniment de prova d'1 €.
+1. Crea un esdeveniment i paga amb una targeta de prova de Stripe.
 2. Verifica que `/success` diu **Pagament confirmat**.
 3. Verifica que la fila apareix a `purchases` a Supabase.
 4. Verifica que arriba el correu de confirmació.
 5. Verifica que la fila apareix al full de la Junta.
 6. Verifica que l'estoc ha baixat d'una unitat.
-7. Torna els diners des de Stripe i, si cal, quadra l'estoc des d'`/admin`.
+7. Simula devolucions, sessions caducades i webhooks repetits. Comprova que no hi ha duplicats i que un esdeveniment tancat continua tancat.
 
-Si algun dels punts 3–5 falla, el problema és gairebé segur el webhook: mira
-els intents i les respostes a la pàgina del endpoint al panell de Stripe.
+Si falta la compra, revisa el webhook i la conciliació. Si només falta la fila
+o el correu, revisa la cua de notificacions i l'Apps Script. Vegeu `PRODUCCIO.md`.
 
 ### 7. Domini
 

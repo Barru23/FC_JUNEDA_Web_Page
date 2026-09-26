@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { readAll } from "@/lib/read-all";
+import type { DbSociRegistration } from "@/lib/supabase";
 
 const ESTATS = new Set(["pending", "active", "cancelled"]);
 
@@ -10,7 +12,7 @@ const ESTATS = new Set(["pending", "active", "cancelled"]);
 // per muntar la remesa al banc. Per aixo la ruta esta darrere
 // isAdminAuthenticated i no s'exposa mai al web public.
 export async function GET(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) {
+  if (!(await isAdminAuthenticated(req))) {
     return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
   }
 
@@ -25,21 +27,17 @@ export async function GET(req: NextRequest) {
 
     if (status && ESTATS.has(status)) query = query.eq("status", status);
 
-    const { data, error } = await query;
-    if (error) {
-      console.warn("[Admin Socis] Query fallback:", error.message);
-      return NextResponse.json([]);
-    }
-    return NextResponse.json(data ?? []);
+    const data = await readAll<DbSociRegistration>((from,to) => query.order("id").range(from,to));
+    return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     console.warn("[Admin Socis] Catch fallback:", err);
-    return NextResponse.json([]);
+    return NextResponse.json({error:"No s'han pogut carregar les dades"},{status:503});
   }
 }
 
 // PATCH /api/admin/socis — marcar una alta com a domiciliada o anul·lada.
 export async function PATCH(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) {
+  if (!(await isAdminAuthenticated(req))) {
     return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
   }
 

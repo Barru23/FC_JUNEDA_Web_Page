@@ -59,7 +59,7 @@ function productPayload(body: Record<string, unknown>) {
 
 // GET /api/admin/products — list all products, including hidden ones.
 export async function GET(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
+  if (!(await isAdminAuthenticated(req))) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   try {
     const supabase = getSupabaseAdmin();
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/admin/products — create a product and publish it to the storefront.
 export async function POST(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
+  if (!(await isAdminAuthenticated(req))) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   try {
     const body = await req.json() as Record<string, unknown>;
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/admin/products — edit only storefront-safe product fields.
 export async function PATCH(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
+  if (!(await isAdminAuthenticated(req))) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   try {
     const body = await req.json() as Record<string, unknown>;
@@ -137,7 +137,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE is intentionally recoverable: the product is hidden, not erased.
 export async function DELETE(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
+  if (!(await isAdminAuthenticated(req))) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID requerit" }, { status: 400 });

@@ -1,6 +1,5 @@
 import Stripe from "stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { notifyPurchase } from "@/lib/notify";
 
 type PurchaseType = "event" | "merch" | "membership";
 
@@ -19,7 +18,6 @@ function parseMoney(value: string | undefined): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
-
 function parseQuantity(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "1", 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
@@ -46,13 +44,15 @@ export async function fulfillCheckoutSession(
   const type = purchaseType(meta.purchase_type);
   const quantity = type === "merch" ? 1 : parseQuantity(meta.quantity);
   const totalPaidEur = (session.amount_total ?? 0) / 100;
+  if (session.currency !== "eur" || totalPaidEur <= 0) throw new Error("Invalid currency or paid amount");
   const feeEur = parseMoney(meta.fee_eur) ?? 0;
   const amountEur = parseMoney(meta.net_eur) ?? Math.max(totalPaidEur - feeEur, 0);
+  if (Math.round((amountEur + feeEur) * 100) !== session.amount_total) throw new Error("Payment metadata does not match the amount charged");
   const paymentId =
     typeof session.payment_intent === "string"
       ? session.payment_intent
       : session.payment_intent?.id ?? "";
-  const paymentMethod = session.payment_method_types?.[0] ?? "stripe";
+  const paymentMethod = "stripe"; // Reconciled later from the actual charge, not the available methods.
   const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase.rpc("finalize_checkout_purchase", {
@@ -79,20 +79,7 @@ export async function fulfillCheckoutSession(
   const row = (Array.isArray(data) ? data[0] : data) as FinalizeRow | null;
   if (!row?.purchase_id) throw new Error(`La compra ${session.id} no ha retornat cap identificador`);
 
-  // Un duplicat ja ha estat notificat per la primera crida. Apps Script no es
-  // part de la transaccio principal: si cau, Stripe i Supabase continuen
-  // reflectint correctament el cobrament i l'admin mostra el correu pendent.
-  if (row.was_created) {
-    await notifyNewPurchase({
-      supabase,
-      purchaseId: row.purchase_id,
-      type,
-      meta,
-      quantity,
-      totalPaidEur,
-    });
-  }
-
+  // A database trigger durably queues delivery in the same transaction.
   return { purchaseId: row.purchase_id, created: row.was_created };
 }
 
@@ -102,128 +89,4 @@ export async function releaseCheckoutReservation(sessionId: string): Promise<voi
     p_session_id: sessionId,
   });
   if (error) throw new Error(`No s'ha pogut alliberar la reserva ${sessionId}: ${error.message}`);
-}
-
-async function notifyNewPurchase({
-  supabase,
-  purchaseId,
-  type,
-  meta,
-  quantity,
-  totalPaidEur,
-}: {
-  supabase: ReturnType<typeof getSupabaseAdmin>;
-  purchaseId: string;
-  type: PurchaseType;
-  meta: Record<string, string>;
-  quantity: number;
-  totalPaidEur: number;
-}) {
-  const now = new Date().toLocaleString("ca-ES", { timeZone: "Europe/Madrid" });
-  let result: Awaited<ReturnType<typeof notifyPurchase>> = null;
-
-  if (type === "event") {
-    const { data: event } = await supabase
-      .from("events")
-      .select("title,date,location,sheet_id")
-      .eq("id", meta.event_id)
-      .maybeSingle();
-
-    if (event) {
-      result = await notifyPurchase({
-        type: "event",
-        sheet: event.sheet_id || event.title,
-        row: {
-          nom: meta.buyer_name,
-          email: meta.buyer_email,
-          telefon: meta.buyer_phone,
-          tiquets: quantity,
-          dietetica: meta.dietary,
-          preu: totalPaidEur,
-          metode: "Stripe",
-          estat: "Pagat ✅",
-          data: now,
-        },
-        email: {
-          to: meta.buyer_email,
-          buyerName: meta.buyer_name,
-          eventTitle: event.title,
-          eventDate: event.date,
-          eventLocation: event.location,
-          quantity,
-          dietary: meta.dietary,
-          total: totalPaidEur,
-        },
-      });
-    }
-  } else if (type === "merch") {
-    const { data: product } = meta.product_id
-      ? await supabase.from("products").select("name").eq("id", meta.product_id).maybeSingle()
-      : { data: null };
-    const productName = product?.name ?? meta.item_title ?? meta.product_slug ?? "Producte";
-    const customization = meta.custom_number ? `#${meta.custom_number}` : undefined;
-
-    result = await notifyPurchase({
-      type: "merch",
-      sheet: "Botiga",
-      row: {
-        nom: meta.buyer_name,
-        email: meta.buyer_email,
-        telefon: meta.buyer_phone,
-        producte: productName,
-        talla: meta.size,
-        personalitzacio: customization ?? "Cap",
-        preu: totalPaidEur,
-        metode: "Stripe",
-        estat: "Pagat ✅",
-        data: now,
-      },
-      email: {
-        to: meta.buyer_email,
-        buyerName: meta.buyer_name,
-        productName,
-        size: meta.size,
-        customization,
-        total: totalPaidEur,
-      },
-    });
-  } else {
-    const { data: tier } = meta.tier_id
-      ? await supabase
-          .from("membership_tiers")
-          .select("name,season")
-          .eq("id", meta.tier_id)
-          .maybeSingle()
-      : { data: null };
-
-    result = await notifyPurchase({
-      type: "membership",
-      sheet: "Socis",
-      row: {
-        nom: meta.buyer_name,
-        email: meta.buyer_email,
-        telefon: meta.buyer_phone,
-        tipusSoci: tier?.name ?? meta.item_title,
-        temporada: tier?.season,
-        preu: totalPaidEur,
-        metode: "Stripe",
-        estat: "Pagat ✅",
-        data: now,
-      },
-      email: {
-        to: meta.buyer_email,
-        buyerName: meta.buyer_name,
-        tierName: tier?.name ?? meta.item_title,
-        season: tier?.season,
-        total: totalPaidEur,
-      },
-    });
-  }
-
-  if (!result?.ok) return;
-  const { error } = await supabase
-    .from("purchases")
-    .update({ sheet_synced: true, email_sent: result.correuEnviat === true })
-    .eq("id", purchaseId);
-  if (error) console.error("[Fulfillment] No s'ha pogut marcar la sincronitzacio:", error);
 }

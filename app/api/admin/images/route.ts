@@ -64,7 +64,7 @@ async function ensureImageBucket() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) {
+  if (!(await isAdminAuthenticated(req))) {
     return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
   }
 
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) {
+  if (!(await isAdminAuthenticated(req))) {
     return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
   }
 

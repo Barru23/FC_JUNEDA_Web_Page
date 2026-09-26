@@ -41,6 +41,7 @@ export function SocisSection() {
   const [dni, setDni] = useState("");
   const [iban, setIban] = useState("");
   const [notes, setNotes] = useState("");
+  const [website, setWebsite] = useState("");
   const [acceptaMandat, setAcceptaMandat] = useState(false);
   const [acceptaCondicions, setAcceptaCondicions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -51,7 +52,7 @@ export function SocisSection() {
 
   useEffect(() => {
     fetch("/api/membership-tiers")
-      .then((r) => r.json())
+      .then(async (r) => { const data = await r.json(); if (!r.ok) throw new Error(data.error); return data; })
       .then((data: MembershipTierEntry[]) => {
         if (Array.isArray(data) && data.length > 0) {
           setTiers(data);
@@ -60,6 +61,7 @@ export function SocisSection() {
       })
       .catch((err) => {
         console.error("Error carregant modalitats de soci:", err);
+        setError("No s'han pogut carregar les modalitats. Torna a carregar la pàgina d'aquí a uns minuts.");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -99,6 +101,7 @@ export function SocisSection() {
           dni: dni.trim(),
           iban: iban.trim(),
           notes: notes.trim() || undefined,
+          website,
           acceptaMandat,
           acceptaCondicions,
         }),
@@ -120,6 +123,7 @@ export function SocisSection() {
         label="Campanya de Socis 2026/27"
         title="Fes-te Soci · La Força d'un Poble"
       />
+      {!loading && !tiers.length && <p role="alert" className="mb-6 text-sm text-red-300">{error ?? "No hi ha modalitats disponibles actualment."}</p>}
 
       <motion.p
         initial={{ opacity: 0, y: 10 }}
@@ -297,7 +301,7 @@ export function SocisSection() {
                   Ja constes com a <strong className="text-white">{selectedTier.name}</strong> per
                   a la temporada {selectedTier.season}. La Junta revisarà les teves dades i
                   domiciliarà la quota de {selectedTier.price_eur.toFixed(2)} € al compte que
-                  ens has indicat. Rebràs un correu de confirmació a {email}.
+                  ens has indicat. La confirmació per correu a {email} pot trigar uns minuts.
                 </p>
                 <p className="text-xs text-white/40">
                   Si veus qualsevol dada incorrecta, escriu-nos i ho corregim abans
@@ -317,6 +321,9 @@ export function SocisSection() {
             </div>
 
             <form onSubmit={handleSignup} className="flex flex-col gap-4">
+              <div aria-hidden="true" className="hidden">
+                <label>Web personal<input name="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></label>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Nom i cognoms *">
                   <input

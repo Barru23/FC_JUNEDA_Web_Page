@@ -50,6 +50,8 @@ export type NotifyEmail = {
 
 export type NotifyResult = {
   ok: boolean;
+  protocol?: number;
+  emailStatus?: "sent" | "skipped" | "review";
   fila?: number;
   correuEnviat?: boolean;
   correuError?: string | null;
@@ -70,6 +72,8 @@ const TIMEOUT_MS = 10000;
  * un error aquí no ha de fer fallar res.
  */
 export async function notifyPurchase(params: {
+  sourceId: string;
+  legacyMatch?: boolean;
   type: NotifyType;
   /** Pestanya del full: el títol de l'activitat, o "Botiga" / "Socis". */
   sheet: string;
@@ -85,13 +89,18 @@ export async function notifyPurchase(params: {
   }
 
   try {
+    // An older Apps Script appends on every call. Refuse retries until its
+    // idempotent protocol is deployed; the durable job remains pending.
+    const health = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(5000), cache: "no-store" });
+    const protocol = await health.json();
+    if (!health.ok || protocol.protocol !== 2) return { ok: false, error: "Cal publicar Apps Script v2" };
     const response = await fetch(url, {
       method: "POST",
       // L'Apps Script llegeix e.postData.contents i el parseja ell mateix, així
       // que el tipus de contingut és indiferent. text/plain evita que el
       // navegador de torn hi faci una petició CORS de preflight.
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ token, ...params }),
+      body: JSON.stringify({ token, protocol: 2, ...params }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
       // Un desplegament d'Apps Script respon amb un 302 cap a googleusercontent.
       redirect: "follow",
@@ -103,12 +112,11 @@ export async function notifyPurchase(params: {
     }
 
     const result = (await response.json()) as NotifyResult;
-    if (!result.ok) console.error("[Notify] Error de l'Apps Script:", result.error);
-    else if (result.correuError) console.warn("[Notify] Fila escrita però el correu ha fallat:", result.correuError);
+    if (result.protocol !== 2) return { ok: false, error: "Protocol de sincronització incompatible" };
 
     return result;
   } catch (err) {
-    console.error("[Notify] No s'ha pogut contactar amb l'Apps Script:", err);
-    return { ok: false, error: String(err) };
+    console.error("[Notify] Servei de sincronització no disponible");
+    return { ok: false, error: "Servei de sincronització no disponible" };
   }
 }

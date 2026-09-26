@@ -28,10 +28,10 @@
  * les tarifes nomes cal tocar-les a elles.
  */
 
-/** Percentatge que Stripe reté de cada cobrament. */
+/** Tarifa de referència per calcular la gestió; la comissió real es concilia amb Stripe. */
 export const STRIPE_PERCENT = 0.015;
 
-/** Import fix que Stripe reté de cada cobrament, en euros. */
+/** Component fix de la tarifa de referència, en euros. */
 export const STRIPE_FIXED_EUR = 0.25;
 
 /** La gestió sempre s'arrodoneix amunt a un múltiple d'aquest import. */
@@ -48,8 +48,8 @@ const NUM_FIXED = FIXED_CENTS * 1000;                // 25000
 
 /**
  * Despeses de gestió, en cèntims, per a un import base en cèntims.
- * El resultat sempre és múltiple de `ROUNDING_STEP_EUR` i mai queda per sota
- * del que Stripe retindrà del total.
+ * El resultat és múltiple de `ROUNDING_STEP_EUR`. La comissió real pot variar
+ * segons el mitjà de pagament; aquest càlcul no és una dada comptable.
  */
 export function serviceFeeCents(baseCents: number): number {
   if (!Number.isFinite(baseCents) || baseCents <= 0) return 0;
@@ -69,7 +69,7 @@ export function serviceFeeEur(baseEur: number): number {
 }
 
 /**
- * El desglòs sencer d'una comanda. `netEur` és el que li queda al club,
+ * El desglòs sencer d'una comanda. `netEur` conserva el nom antic i és l'import base,
  * `totalEur` el que el comprador veu a Stripe.
  */
 export function priceBreakdown(baseEur: number): {

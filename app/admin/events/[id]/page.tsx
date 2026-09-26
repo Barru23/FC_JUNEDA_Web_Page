@@ -10,12 +10,10 @@ import { Crest } from "@/components/Crest";
 import { downloadCsv } from "@/lib/csv";
 import { getSheetUrl } from "@/lib/sheets-link";
 
-function getToken(): string {
-  return sessionStorage.getItem("admin_token") ?? "";
-}
+
 
 function authHeaders() {
-  return { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
+  return { "Content-Type": "application/json" };
 }
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -37,17 +35,20 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [dietaryFilter, setDietaryFilter] = useState<string>("all");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     const h = authHeaders();
     try {
       const [eventsRes, purchasesRes] = await Promise.all([
         fetch("/api/admin/events", { headers: h }),
         fetch(`/api/admin/purchases?event_id=${eventId}`, { headers: h }),
       ]);
-
+      if (eventsRes.status === 401 || purchasesRes.status === 401) window.dispatchEvent(new Event("admin-session-expired"));
+      if (!eventsRes.ok || !purchasesRes.ok) throw new Error("No s'han pogut carregar els assistents. Torna-ho a provar.");
       if (eventsRes.ok) {
         const allEvents = await eventsRes.json();
         const found = allEvents.find((e: { id: string }) => e.id === eventId);
@@ -57,7 +58,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         setPurchases(await purchasesRes.json());
       }
     } catch (err) {
-      console.error("Error fetching event details:", err);
+      setLoadError(err instanceof Error ? err.message : "No s'han pogut carregar les dades");
     } finally {
       setLoading(false);
     }
@@ -96,7 +97,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       p.dietary ?? "Cap",
       p.amount_eur,
       p.fee_eur ?? 0,
-      p.payment_method === "cash" ? "Efectiu" : "Targeta (Stripe)",
+      p.payment_method === "cash" ? "Efectiu" : p.payment_method === "bizum" ? "Bizum" : p.payment_method === "card" ? "Targeta" : "Stripe",
       p.payment_status === "completed" ? "Pagat" : p.payment_status,
       new Date(p.created_at).toLocaleDateString("ca-ES"),
     ]);
@@ -113,6 +114,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="min-h-screen bg-carbon text-white">
+      {loadError && <p role="alert" className="bg-red-950 p-4 text-sm text-red-200">{loadError}</p>}
       {/* Header */}
       <header className="border-b border-white/10 bg-black/30 backdrop-blur-md px-6 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40">
         <div className="flex min-w-0 items-center gap-4">

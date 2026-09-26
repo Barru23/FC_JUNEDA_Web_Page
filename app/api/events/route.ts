@@ -15,7 +15,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from("events")
       .select("*")
-      .in("status", ["active", "sold_out"])
+      .in("status", ["active", "sold_out", "closed"])
       .order("created_at", { ascending: false });
     if (error) throw error;
 

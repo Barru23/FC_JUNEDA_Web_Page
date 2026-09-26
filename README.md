@@ -25,7 +25,7 @@ La ruta `/admin` permet a la Junta:
 - Crear, editar i cancel·lar esdeveniments.
 - Crear, editar i ocultar productes de la botiga.
 - Registrar cobraments manuals en efectiu.
-- Corregir l'estat d'operacions i marcar altes com a domiciliades o anul·lades.
+- Marcar altes com a domiciliades o anul·lades; els pagaments es concilien amb Stripe.
 - Exportar dades en CSV i obrir el full mestre de Google Sheets.
 
 El calendari esportiu no es gestiona des del panell: és contingut oficial versionat a `content/matches.json`, de manera que cada canvi queda auditable a Git.
@@ -75,7 +75,7 @@ Navegador
 4. Stripe crida `/api/webhooks/stripe`; la signatura es verifica abans d'actualitzar res. `checkout.session.completed` confirma els mètodes immediats i `checkout.session.async_payment_succeeded` confirma els asíncrons.
 5. Una transacció idempotent converteix la reserva en una compra. Webhooks repetits i la pàgina `/success` poden coincidir sense duplicar files ni descomptar dues vegades.
 6. Si la sessió caduca o el pagament asíncron falla, es recupera exactament una vegada l'estoc reservat.
-7. Apps Script escriu la fila al full corresponent i envia el correu de confirmació. Si aquest pas falla, la compra continua registrada a Supabase i Stripe conserva el rebut.
+7. La mateixa transacció crea una tasca de sincronització. Una funció de Netlify envia la fila i el correu a Apps Script amb identificador estable, reintents i control de duplicats. Si Google falla, la compra continua registrada i el panell mostra la incidència.
 
 La pantalla `/success` consulta Stripe al servidor i només mostra **Pagament confirmat** quan `payment_status` és `paid`. Això és la confirmació del cobrament del comprador; no depèn del pagament posterior que Stripe fa al compte bancari del club. La resposta pública conté només el resum necessari i el correu emmascarat.
 
@@ -109,7 +109,7 @@ supabase-schema.sql  Esquema inicial de la base de dades
 
 ### Requisits
 
-- Node.js 18 o superior.
+- Node.js 22 o superior.
 - Un projecte de Supabase.
 - Un compte de Stripe si es vol provar el checkout.
 - Un full de Google Sheets amb l'Apps Script desplegat si es volen provar registres i correus.
@@ -140,6 +140,8 @@ Executa `supabase-schema.sql` a l'editor SQL del projecte de Supabase. L'esquema
 També inclou les funcions transaccionals de reserva, confirmació i alliberament d'inventari i les polítiques de lectura pública previstes. L'aplicació, però, accedeix a les dades mitjançant les rutes del servidor i la clau de servei.
 
 Després d'una actualització de `supabase-schema.sql`, executa'l **abans de desplegar el codi que utilitza les funcions noves**. L'script es pot tornar a executar (`IF NOT EXISTS`, `CREATE OR REPLACE` i llavors amb conflicte controlat).
+
+Aplica també les migracions de `supabase/migrations/` en ordre. La posada en marxa de la conciliació, les sessions i la cua de notificacions es descriu a [PRODUCCIO.md](PRODUCCIO.md).
 
 ### Google Apps Script
 

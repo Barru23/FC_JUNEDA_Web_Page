@@ -7,6 +7,7 @@ import type { ClubEvent } from "@/lib/data";
 import { Modal } from "@/components/ui/Modal";
 import { serviceFeeEur } from "@/lib/fees";
 import { ConsentCheckbox, LegalLink } from "@/components/legal/ConsentCheckbox";
+import { salesOpen } from "@/lib/event-status";
 
 const DIETARY_OPTIONS = [
   "Cap intolerancia",
@@ -47,6 +48,10 @@ export function BookingDrawer({
   const total = baseTotal + fee;
 
   async function handleCheckout() {
+    if (!salesOpen(event.status, event.spotsLeft)) {
+      setError("Les inscripcions d'aquest esdeveniment estan tancades");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

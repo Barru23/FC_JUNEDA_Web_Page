@@ -5,6 +5,7 @@ import { AnimatePresence } from "framer-motion";
 import { BookingDrawer } from "./BookingDrawer";
 import type { ClubEvent } from "@/lib/data";
 import { serviceFeeEur } from "@/lib/fees";
+import { salesOpen, eventStatusLabel } from "@/lib/event-status";
 import { CalendarDays, MapPin, UtensilsCrossed } from "lucide-react";
 
 export function EventsSection() {
@@ -22,7 +23,7 @@ export function EventsSection() {
       setEvents(nextEvents);
       setLoadError(null);
       setActive((current) => current
-        ? nextEvents.find((item) => item.dbId === current.dbId || item.id === current.id) ?? null
+        ? nextEvents.find((item) => (item.dbId === current.dbId || item.id === current.id) && salesOpen(item.status, item.spotsLeft)) ?? null
         : null
       );
     } catch (err) {
@@ -54,7 +55,8 @@ export function EventsSection() {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {events.map((event) => {
-            const soldOut = event.spotsLeft <= 0 || event.status === "sold_out";
+            const soldOut = !salesOpen(event.status, event.spotsLeft);
+            const closedLabel = eventStatusLabel(event.status === "active" ? "sold_out" : event.status ?? "closed");
             const percentFull = event.totalSpots ? Math.round(((event.totalSpots - event.spotsLeft) / event.totalSpots) * 100) : 0;
 
             return (
@@ -77,7 +79,7 @@ export function EventsSection() {
                   {soldOut && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/60">
                       <span className="rounded-full bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white/70">
-                        Exhaurit
+                        {closedLabel}
                       </span>
                     </div>
                   )}
@@ -92,7 +94,7 @@ export function EventsSection() {
                 </div>
 
                 {/* Occupancy bar */}
-                {event.totalSpots && (
+                {event.totalSpots && !soldOut && (
                   <div className="flex flex-col gap-1">
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                       <div
@@ -116,7 +118,7 @@ export function EventsSection() {
                     </span>
                   </div>
                   <span className={`rounded-full border px-3 py-1 text-xs ${soldOut ? "border-white/10 text-white/30" : "border-brand/30 bg-brand/10 text-brand-light"}`}>
-                    {soldOut ? "Exhaurit" : `${event.spotsLeft} places`}
+                    {soldOut ? closedLabel : `${event.spotsLeft} places`}
                   </span>
                 </div>
 
@@ -125,7 +127,7 @@ export function EventsSection() {
                   disabled={soldOut}
                   className="rounded-full bg-brand py-3 text-sm font-semibold uppercase tracking-wide text-white transition-transform hover:scale-[1.01] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
-                  {soldOut ? "Exhaurit" : "Reservar plaça"}
+                  {soldOut ? closedLabel : "Reservar plaça"}
                 </button>
               </article>
             );

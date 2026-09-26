@@ -16,6 +16,8 @@ function getStripe(): Stripe {
     client = new Stripe(apiKey, {
       apiVersion: "2025-02-24.acacia",
       typescript: true,
+      timeout: 5000,
+      maxNetworkRetries: 0,
     });
   }
   return client;

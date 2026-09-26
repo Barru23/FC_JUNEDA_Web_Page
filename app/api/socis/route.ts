@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getMembershipTier } from "@/lib/memberships";
-import { notifyPurchase } from "@/lib/notify";
-import { normalitzaIdentificador, normalitzaDni, validaDni, validaIban, formatIban } from "@/lib/identitat";
+import { normalitzaIdentificador, normalitzaDni, validaDni, validaIban } from "@/lib/identitat";
 import { TERMS_VERSION } from "@/lib/legal";
+import { limitRequest, readJson, RequestError, sameOrigin } from "@/lib/request-security";
 
 // POST /api/socis — alta de soci SENSE pagament en linia.
 //
@@ -13,7 +12,9 @@ import { TERMS_VERSION } from "@/lib/legal";
 // estadistiques amb diners que encara no han entrat.
 
 function net(value: unknown, max = 200): string {
-  return typeof value === "string" ? value.trim().slice(0, max) : "";
+  if (value === undefined || value === null) return "";
+  if (typeof value !== "string" || value.length > max) throw new RequestError("Revisa la longitud i el format dels camps");
+  return value.trim();
 }
 
 // Mateixa validacio laxa que el checkout: descartem nomes el que segur que no
@@ -23,8 +24,12 @@ function validEmail(value: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) return NextResponse.json({ error: "Origen no autoritzat" }, { status: 403 });
   try {
-    const body = await req.json();
+    const limited = await limitRequest(req, "soci-signup", 10, 15 * 60);
+    if (limited) return limited;
+    const body = await readJson(req);
+    if (body.website) throw new RequestError("No s'ha pogut validar el formulari");
 
     const nom = net(body.nom, 120);
     const email = net(body.email, 160);
@@ -32,7 +37,7 @@ export async function POST(req: NextRequest) {
     const dni = normalitzaDni(net(body.dni, 20));
     const iban = normalitzaIdentificador(net(body.iban, 40));
     const notes = net(body.notes, 500);
-    const tierSlug = net(body.tierSlug, 80) || "soci-general";
+    const tierSlug = net(body.tierSlug, 80);
     const acceptaMandat = body.acceptaMandat === true;
     const acceptaCondicions = body.acceptaCondicions === true;
 
@@ -73,26 +78,22 @@ export async function POST(req: NextRequest) {
     // La modalitat i el preu surten de Supabase, mai del formulari: el preu
     // que arriba del navegador no decideix res.
     const supabase = getSupabaseAdmin();
-    const catalogueTier = getMembershipTier(tierSlug);
-    let tierName = catalogueTier?.name ?? "Soci General";
-    let priceEur = catalogueTier?.price_eur ?? null;
-    let season = catalogueTier?.season ?? "2026/27";
-    let tierDbId: string | null = null;
-
-    const { data: tier } = await supabase
+    const { data: tier, error: tierError } = await supabase
       .from("membership_tiers")
       .select("id, name, price_eur, season")
       .eq("slug", tierSlug)
+      .eq("status", "active")
       .maybeSingle();
-    if (tier) {
-      tierDbId = tier.id;
-      tierName = tier.name;
-      priceEur = Number(tier.price_eur);
-      season = tier.season;
+    if (tierError) throw new Error("No s'ha pogut consultar la modalitat");
+    if (!tier || !Number.isFinite(Number(tier.price_eur)) || Number(tier.price_eur) <= 0) {
+      throw new RequestError("La modalitat seleccionada no està disponible", 409);
     }
+    const tierName = tier.name;
+    const priceEur = Number(tier.price_eur);
+    const season = tier.season;
 
     const mandateAcceptedAt = new Date().toISOString();
-    const { data: registration, error } = await supabase
+    const { error } = await supabase
       .from("soci_registrations")
       .insert({
         nom,
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
         email,
         telefon,
         iban,
-        tier_id: tierDbId,
+        tier_id: tier.id,
         tier_slug: tierSlug,
         tier_name: tierName,
         price_eur: priceEur,
@@ -109,9 +110,7 @@ export async function POST(req: NextRequest) {
         mandate_accepted_at: mandateAcceptedAt,
         terms_version: TERMS_VERSION,
         status: "pending",
-      })
-      .select()
-      .single();
+      });
 
     if (error) {
       // 23505 = unique_violation sobre (dni, temporada): ja hi ha una alta.
@@ -121,51 +120,15 @@ export async function POST(req: NextRequest) {
           { status: 409 },
         );
       }
-      console.error("[Socis] Error desant l'alta:", error);
+      console.error("[Socis] Error desant l'alta:", error.code);
       return NextResponse.json({ error: "No s'ha pogut desar l'alta" }, { status: 500 });
     }
 
-    // El full i el correu no son imprescindibles: l'alta ja es a Supabase i la
-    // Junta la veu a /admin encara que aixo falli.
-    const result = await notifyPurchase({
-      type: "soci",
-      // Pestanya propia, no la "Socis" de sempre: aquella te les columnes de
-      // les quotes cobrades per Stripe i unes altes amb DNI i IBAN hi caurien
-      // desquadrades sota unes capçaleres que no els corresponen.
-      sheet: "Altes Socis",
-      row: {
-        nom,
-        email,
-        telefon,
-        dni,
-        iban: formatIban(iban),
-        tipusSoci: tierName,
-        temporada: season,
-        observacions: notes || "—",
-        preu: priceEur ?? 0,
-        metode: "Domiciliació bancària",
-        estat: "Pendent de domiciliar",
-        data: new Date().toLocaleString("ca-ES", { timeZone: "Europe/Madrid" }),
-      },
-      email: {
-        to: email,
-        buyerName: nom,
-        tierName,
-        season,
-        quotaAnual: priceEur ?? undefined,
-      },
-    });
-
-    if (result?.ok && registration?.id) {
-      await supabase
-        .from("soci_registrations")
-        .update({ sheet_synced: true })
-        .eq("id", registration.id);
-    }
-
+    // The database trigger queues delivery in the same transaction.
     return NextResponse.json({ ok: true, tierName, season, priceEur });
   } catch (err) {
-    console.error("[Socis] Error:", err);
-    return NextResponse.json({ error: "Error intern del servidor" }, { status: 500 });
+    if (err instanceof RequestError) return NextResponse.json({ error: err.message }, { status: err.status });
+    console.error("[Socis] Service unavailable");
+    return NextResponse.json({ error: "No s'ha pogut completar l'alta. Torna-ho a provar d'aquí a uns minuts." }, { status: 503 });
   }
 }

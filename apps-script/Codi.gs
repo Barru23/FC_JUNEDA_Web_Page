@@ -38,7 +38,7 @@ var CONTACTE = 'junedaclubfutbol@gmail.com';
 // quedaria com un quadre buit. La versió d'aquesta URL ja ve retallada a 220 px
 // i 13 KB; l'original fa 570 KB i no té sentit adjuntar-lo a cada correu.
 // Si canvieu el domini de la web, canvieu-lo també aquí.
-var LOGO_URL = 'https://cfjuneda.vercel.app/data/logo-email.png';
+var LOGO_URL = 'https://cf-juneda.netlify.app/data/logo-email.png';
 
 // Les capçaleres depenen del tipus d'activitat. L'ordre mana: és el mateix
 // ordre en què construïm la fila a fila_().
@@ -51,51 +51,107 @@ var CAPCALERES = {
 };
 
 function doPost(e) {
+  var lock = LockService.getScriptLock();
   try {
-    if (!e || !e.postData || !e.postData.contents) {
-      return resposta_({ ok: false, error: 'Petició buida' });
-    }
-
+    if (!e || !e.postData || !e.postData.contents || e.postData.contents.length > 20000) return resposta_({ok:false,error:'Petició no vàlida'});
     var dades = JSON.parse(e.postData.contents);
-
-    if (dades.token !== TOKEN) {
-      return resposta_({ ok: false, error: 'Token no vàlid' });
-    }
-
-    var tipus = dades.type;
-    if (!CAPCALERES[tipus]) {
-      return resposta_({ ok: false, error: 'Tipus desconegut: ' + tipus });
-    }
-
-    // El full i el correu es tracten per separat: si el correu falla (quota de
-    // Gmail, adreça inexistent), la fila ha de quedar escrita igualment. La
-    // Junta necessita el registre molt més que el comprador el correu, que
-    // sempre té el rebut de Stripe com a comprovant.
-    var fila = afegirFila_(dades.sheet, tipus, dades.row || {});
-
-    var correuEnviat = false;
-    var correuError = null;
-    if (dades.email && dades.email.to) {
+    var configuredToken = PropertiesService.getScriptProperties().getProperty('TOKEN') || TOKEN;
+    if (dades.token !== configuredToken) return resposta_({ok:false,error:'Token no vàlid'});
+    if (dades.protocol !== 2 || !/^(purchase|soci):[0-9a-f-]{36}$/.test(dades.sourceId || '')) return resposta_({ok:false,error:'Cal actualitzar el servidor al protocol 2'});
+    var tipus=dades.type;
+    if (!CAPCALERES[tipus]) return resposta_({ok:false,error:'Tipus desconegut'});
+    if (!lock.tryLock(1500)) return resposta_({ok:false,error:'Sincronització ocupada, torna-ho a provar'});
+    var fila=desarFila_(dades.sheet,tipus,dades.row || {},dades.sourceId,!!dades.legacyMatch);
+    var props=PropertiesService.getScriptProperties();
+    var mailKey='mail:'+dades.sourceId;
+    var state=props.getProperty(mailKey);
+    var emailStatus=state === 'sent' ? 'sent' : state === 'sending' || state === 'review' ? 'review' : 'skipped';
+    if (dades.email && dades.email.to && !state) {
+      // Persist before contacting MailApp. A timeout has an ambiguous outcome;
+      // retries must not send a second email.
+      props.setProperty(mailKey,'sending');
       try {
-        enviarCorreu_(tipus, dades.email);
-        correuEnviat = true;
+        enviarCorreu_(tipus,dades.email);
+        props.setProperty(mailKey,'sent');
+        emailStatus='sent';
       } catch (err) {
-        correuError = String(err);
+        props.setProperty(mailKey,'review');
+        emailStatus='review';
       }
     }
-
-    return resposta_({ ok: true, fila: fila, correuEnviat: correuEnviat, correuError: correuError });
+    return resposta_({ok:true,fila:fila,correuEnviat:emailStatus==='sent',emailStatus:emailStatus});
   } catch (err) {
-    return resposta_({ ok: false, error: String(err) });
+    // Do not echo form contents, DNI or bank details to logs or responses.
+    return resposta_({ok:false,error:err && err.message === 'LEGACY_MATCH_AMBIGUOUS' ? 'Cal revisar una coincidència amb el full antic' : 'No s’ha pogut sincronitzar el registre'});
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
   }
 }
 
-/** Comprovació ràpida des del navegador: obrir la URL /exec ha de dir que viu. */
+function textSegur_(valor) {
+  if (typeof valor !== 'string') return valor == null ? '' : valor;
+  return /^[\s\u0000-\u001f]*[=+@-]/.test(valor) ? "'"+valor : valor;
+}
+
+function desarFila_(nomFull,tipus,row,sourceId,legacyMatch) {
+  var llibre=SpreadsheetApp.getActiveSpreadsheet();
+  var nom=netejarNomFull_(nomFull || 'Registres');
+  var full=llibre.getSheetByName(nom) || llibre.insertSheet(nom);
+  var capcaleres=CAPCALERES[tipus];
+  if (full.getLastRow()===0) escriureCapcaleres_(full,capcaleres);
+  var width=full.getLastColumn();
+  var headers=full.getRange(1,1,1,width).getValues()[0];
+  // Refuse a mismatched old tab rather than writing under wrong headings.
+  for(var h=0;h<capcaleres.length;h++) if(headers[h]!==capcaleres[h]) throw new Error('HEADERS_MISMATCH');
+  var idColumn=headers.indexOf('__cfjuneda_id')+1;
+  if (!idColumn) {
+    idColumn=width+1;
+    full.getRange(1,idColumn).setValue('__cfjuneda_id');
+    full.hideColumns(idColumn);
+  }
+  var values=fila_(tipus,row).map(textSegur_);
+  var count=full.getLastRow()-1;
+  var target=0;
+  if(count>0) {
+    var stored=full.getRange(2,1,count,full.getLastColumn()).getValues();
+    for(var i=0;i<stored.length;i++) if(stored[i][idColumn-1]===sourceId) {
+      if(target) throw new Error('LEGACY_MATCH_AMBIGUOUS');
+      target=i+2;
+    }
+    if(!target && legacyMatch) {
+      var emailColumn=capcaleres.indexOf('Email');
+      var candidates=[];
+      for(var j=0;j<stored.length;j++) {
+        if(stored[j][idColumn-1]) continue;
+        var sameName=String(stored[j][0]).trim().toLowerCase()===String(values[0]).trim().toLowerCase();
+        var sameEmail=String(stored[j][emailColumn]).trim().toLowerCase()===String(row.email || '').trim().toLowerCase();
+        if(sameName || (row.email && sameEmail)) candidates.push(j+2);
+      }
+      if(candidates.length>1) throw new Error('LEGACY_MATCH_AMBIGUOUS');
+      if(candidates.length===1) {
+        var candidate=stored[candidates[0]-2];
+        var nameMatches=String(candidate[0]).trim().toLowerCase()===String(values[0]).trim().toLowerCase();
+        var emailMatches=String(candidate[emailColumn]).trim().toLowerCase()===String(row.email || '').trim().toLowerCase();
+        if(!nameMatches || !emailMatches) throw new Error('LEGACY_MATCH_AMBIGUOUS');
+        target=candidates[0];
+      }
+    }
+  }
+  if(!target) target=full.getLastRow()+1;
+  // Persist identity first. An interrupted write can safely be retried.
+  full.getRange(target,idColumn).setValue(sourceId);
+  full.getRange(target,1,1,values.length).setValues([values]);
+  SpreadsheetApp.flush();
+  return target;
+}
+
+
 function doGet() {
   return resposta_({ ok: true, servei: 'CF Juneda — registre i correus' });
 }
 
 function resposta_(obj) {
+  obj.protocol = 2;
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);

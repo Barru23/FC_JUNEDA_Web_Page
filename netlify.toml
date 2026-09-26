@@ -9,7 +9,7 @@
 # next.config.mjs: el runtime les respecta i no s'han de duplicar aqui.
 
 [build]
-  command = "npm run build"
+  command = "npm test && npm run build"
   publish = ".next"
 
 [build.environment]

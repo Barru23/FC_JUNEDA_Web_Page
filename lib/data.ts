@@ -43,7 +43,7 @@ export type Purchase = {
   custom_name?: string;
   custom_number?: string;
   amount_eur: number;
-  /** Despeses de gestió cobrades al comprador. Se'n van íntegres a Stripe. */
+  /** Despeses de gestió cobrades al comprador, diferents de la comissió real de Stripe. */
   fee_eur?: number;
   payment_method?: string;
   payment_status: "pending" | "completed" | "refunded" | "failed";
@@ -57,6 +57,8 @@ export type Purchase = {
 };
 
 export type DashboardStats = {
+  notifications_pending: number;
+  notifications_review: number;
   total_revenue: number;
   event_revenue: number;
   merch_revenue: number;
@@ -67,4 +69,3 @@ export type DashboardStats = {
   active_members: number;
   recent_purchases: Purchase[];
 };
-

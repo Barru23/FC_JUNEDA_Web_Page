@@ -3,7 +3,8 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 
 const EVENT_TYPES = new Set(["dinner", "lunch", "party", "other"]);
-const EVENT_STATUSES = new Set(["active", "sold_out", "cancelled", "past"]);
+import { EVENT_STATUSES } from "@/lib/event-status";
+import { readAll } from "@/lib/read-all";
 
 function positiveMoney(value: unknown): number | null {
   const amount = Number(value);
@@ -12,29 +13,28 @@ function positiveMoney(value: unknown): number | null {
 
 // GET /api/admin/events — list all events with purchase counts
 export async function GET(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
+  if (!(await isAdminAuthenticated(req))) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from("events")
-      .select("*, purchases(count)")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.warn("[Admin Events] Query fallback:", error.message);
-      return NextResponse.json([]);
-    }
-    return NextResponse.json(data ?? []);
+    const [events, purchases, reservations] = await Promise.all([
+      readAll<any>((from,to) => supabase.from("events").select("*").order("id").range(from,to)),
+      readAll<{event_id:string;quantity:number}>((from,to) => supabase.from("purchases").select("event_id,quantity").eq("purchase_type","event").eq("payment_status","completed").order("id").range(from,to)),
+      readAll<{event_id:string;quantity:number}>((from,to) => supabase.from("checkout_reservations").select("event_id,quantity").eq("status","reserved").order("stripe_session_id").range(from,to)),
+    ]);
+    return NextResponse.json(events.map(event => ({...event,
+      tickets_sold: purchases.filter(p=>p.event_id===event.id).reduce((n,p)=>n+p.quantity,0),
+      reserved_places: reservations.filter(r=>r.event_id===event.id).reduce((n,r)=>n+r.quantity,0),
+    })), {headers:{"Cache-Control":"no-store"}});
   } catch (err) {
     console.warn("[Admin Events] Catch fallback:", err);
-    return NextResponse.json([]);
+    return NextResponse.json({ error: "No s'han pogut carregar els esdeveniments" }, { status: 503 });
   }
 }
 
 // POST /api/admin/events — create a new event + auto-create Google Sheet tab
 export async function POST(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
+  if (!(await isAdminAuthenticated(req))) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   const body = await req.json();
   const { title, description, event_type, date, location, menu, image_url } = body;
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       total_spots: totalSpots,
       spots_remaining: totalSpots,
       sheet_id: sheetId,
-      status: "active",
+      status: "closed",
     })
     .select()
     .single();
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/admin/events — update event
 export async function PATCH(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
+  if (!(await isAdminAuthenticated(req))) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   const body = await req.json();
   const { id } = body;
@@ -95,14 +95,10 @@ export async function PATCH(req: NextRequest) {
 
   const priceEur = positiveMoney(body.price_eur);
   const totalSpots = Number(body.total_spots);
-  const spotsRemaining = Number(body.spots_remaining);
   if (
     priceEur === null ||
     !Number.isInteger(totalSpots) ||
-    totalSpots < 1 ||
-    !Number.isInteger(spotsRemaining) ||
-    spotsRemaining < 0 ||
-    spotsRemaining > totalSpots
+    totalSpots < 1 || !EVENT_STATUSES.has(body.status)
   ) {
     return NextResponse.json({ error: "Preu o places no vàlids" }, { status: 400 });
   }
@@ -117,15 +113,14 @@ export async function PATCH(req: NextRequest) {
     image_url: typeof body.image_url === "string" ? body.image_url.trim() || null : null,
     price_eur: priceEur,
     total_spots: totalSpots,
-    spots_remaining: spotsRemaining,
-    status: EVENT_STATUSES.has(body.status) ? body.status : "active",
+    status: body.status,
   };
   if (!updates.title || !updates.date || !updates.location) {
     return NextResponse.json({ error: "Falten camps obligatoris" }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.from("events").update(updates).eq("id", id).select().single();
+  const { data, error } = await supabase.rpc("update_event_details", { p_id: id, p_details: updates });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
@@ -133,7 +128,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/admin/events — soft-delete (set status = cancelled)
 export async function DELETE(req: NextRequest) {
-  if (!isAdminAuthenticated(req)) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
+  if (!(await isAdminAuthenticated(req))) return NextResponse.json({ error: "No autoritzat" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
