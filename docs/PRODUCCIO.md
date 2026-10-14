@@ -6,7 +6,7 @@
 2. Publicar `apps-script/Codi.gs` conservant el token configurat i la URL del desplegament. El GET ha de respondre `ok: true, protocol: 2`.
 3. Publicar la web i les funcions de Netlify. `npm test`, `npm run validate:calendar` i `npm run build` han de passar amb Node 22 o superior.
 4. Verificar el webhook de Stripe, que ha d'apuntar a `https://cf-juneda.netlify.app/api/webhooks/stripe`. Cal que estigui activat i que el secret de signatura del mateix endpoint coincideixi amb `STRIPE_WEBHOOK_SECRET` a Netlify. Un lliurament real ha de respondre **200**. Un 500 és un error de processament que s'ha de corregir.
-5. Amb les versions publicades i comprovades, activar `maintenance_state.enabled` de la fila `reconcile`. Comprovar les funcions `reconcile` (cada cinc minuts) i `notifications` (cada minut) al panell de Netlify.
+5. Amb les versions publicades i comprovades, activar `maintenance_state.enabled` de la fila `reconcile`. Comprovar les funcions `reconcile` (cada cinc minuts) i `notifications` (cada cinc minuts, fins a quatre tasques per execució) al panell de Netlify.
 6. Afegir un monitor HTTP a `/api/health/reconciliation`, conservant el monitor existent de `/api/events`. Un 503 indica conciliació desactivada, fallida o sense èxit en vint minuts, o bé una sincronització antiga/pendent de revisió.
 
 Els secrets es configuren a Netlify amb abast **Functions** (o tots els àmbits), no a `netlify.toml`. `RATE_LIMIT_SECRET` és opcional; si falta, els identificadors es deriven amb HMAC de la clau de servei. No es desen IP en clar. `SITE_ID`, proporcionat per Netlify en execució, habilita la lectura de la capçalera d'IP de la plataforma.
