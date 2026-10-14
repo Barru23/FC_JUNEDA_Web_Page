@@ -233,8 +233,7 @@ La ruta escollida no és casual i **no s'ha de canviar per la portada**:
 - `/api/events` respon amb `Cache-Control: no-store`, així que cada petició
   consulta Supabase de veritat en comptes de servir-se de la memòria cau.
 - Falla tancada amb un `503` si Supabase no respon, de manera que el monitor
-  avisa per correu. És l'excepció al punt 10 de [`PENDENTS.md`](./PENDENTS.md),
-  on una avaria pot semblar una llista buida.
+  avisa per correu.
 - La portada no serviria: és estàtica, se serveix del CDN i un monitor HTTP no
   executa JavaScript, així que no arribaria mai a la base de dades. Un
   `/#esdeveniments` encara menys, perquè el fragment posterior a `#` no
@@ -267,8 +266,6 @@ No hi ha cap esborrat automàtic, per evitar una eliminació irreversible per er
 - Modals amb focus inicial, bucle de teclat, tancament amb `Esc` i retorn del focus.
 - Originals pesants fora de `public/` i càrrega diferida del camp 3D.
 - El loader inicial amb l'escut forma part del disseny del club i es manté deliberadament.
-
-Les limitacions de seguretat, operació i millores pendents estan documentades a [`PENDENTS.md`](./PENDENTS.md). Cal revisar-les abans d'obrir el panell d'administració a un ús ampli o gestionar dades reals a producció.
 
 ---
 
