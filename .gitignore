@@ -20,9 +20,14 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# Local env files
-.env*.local
-.env
+# Local env files — every variant except the documented template
+.env*
+!.env.example
+
+# Platform and tooling state
+.netlify/
+.vercel/
+.claude/
 
 # IDE / Editor configuration
 .vscode/
