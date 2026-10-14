@@ -1,19 +1,60 @@
+<div align="center">
+
+<img src="public/data/logo-email.png" alt="Escut del CF Juneda" width="96" />
+
 # Web oficial del CF Juneda
 
-Aplicació web del **Club Futbol Juneda** per a la temporada 2026/27, en què el primer equip competeix a **Segona Catalana, Grup 5**.
+**Calendari, plantilla en 3D, socis, botiga i reserves del Club Futbol Juneda, amb panell de gestió per a la Junta.**
 
-La web reuneix en un sol lloc la informació esportiva i els serveis digitals del club: calendari de lliga, plantilla, campanya de socis, botiga, esdeveniments, reserves i gestió interna. L'objectiu és que l'afició pugui seguir l'equip i fer gestions habituals des del mòbil, mentre la Junta rep les dades i controla les operacions des d'un panell propi.
+[![Web en viu](https://img.shields.io/badge/web_en_viu-cf--juneda.netlify.app-e10600?style=for-the-badge)](https://cf-juneda.netlify.app)
 
-## Funcionalitats
+[![Checks](https://github.com/Barru23/FC_JUNEDA_Web_Page/actions/workflows/checks.yml/badge.svg)](https://github.com/Barru23/FC_JUNEDA_Web_Page/actions/workflows/checks.yml)
+![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs)
+![React](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)
+![Three.js](https://img.shields.io/badge/Three.js-R3F-000000?logo=threedotjs)
+![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ecf8e?logo=supabase&logoColor=white)
+![Stripe](https://img.shields.io/badge/Stripe-Checkout-635bff?logo=stripe&logoColor=white)
+![Netlify](https://img.shields.io/badge/Netlify-deploy-00c7b7?logo=netlify&logoColor=white)
+
+</div>
+
+> **English summary** — Production website for CF Juneda, an amateur football club in Catalonia. Fans can follow the 2026/27 league calendar, explore the squad on an interactive 3D pitch, sign up as members (SEPA direct debit) and buy event tickets and merchandise through Stripe Checkout. The club board manages events, products, cash sales, members and finances from a protected admin panel, with every record mirrored to a Google Sheet and confirmation emails sent from the club's own account. Built with Next.js 15, React 19, TypeScript, Three.js, Supabase and Stripe, deployed on Netlify.
+
+<p align="center">
+  <img src="docs/screenshots/home.webp" alt="Portada de la web del CF Juneda" width="100%" />
+</p>
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/screenshots/calendar.webp" alt="Calendari de lliga amb el pròxim partit" /></td>
+    <td width="33%"><img src="docs/screenshots/squad-3d.webp" alt="Plantilla sobre un camp tàctic en 3D" /></td>
+    <td width="33%"><img src="docs/screenshots/membership.webp" alt="Campanya i formulari d'alta de socis" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Calendari de 30 jornades</sub></td>
+    <td align="center"><sub>Plantilla en un camp 3D</sub></td>
+    <td align="center"><sub>Alta de socis amb mandat SEPA</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/mobile.webp" alt="Portada en un mòbil" width="260" /><br />
+  <sub>Pensada primer per al mòbil</sub>
+</p>
+
+## Què fa
+
+La web reuneix en un sol lloc la informació esportiva i els serveis digitals del club per a la temporada 2026/27, en què el primer equip competeix a **Segona Catalana, Grup 5**. L'afició pot seguir l'equip i fer gestions des del mòbil, mentre la Junta rep les dades i controla les operacions des d'un panell propi.
 
 ### Web pública
 
 - Calendari complet de les 30 jornades de lliga, amb pròxim partit i filtres de casa/fora.
-- Plantilla i cos tècnic presentats sobre un camp tàctic interactiu.
+- Plantilla i cos tècnic presentats com a cromos sobre un camp tàctic 3D interactiu.
 - Alta de socis amb modalitats, validació de DNI/NIE i IBAN i mandat de domiciliació.
-- Botiga oficial amb talla, estoc i personalització de nom i dorsal.
+- Botiga oficial amb talla, estoc i personalització de dorsal.
 - Reserva i pagament de dinars, sopars i altres esdeveniments del club.
-- Pàgina de confirmació de compra i consulta de l'estat real de Stripe.
+- Pàgina de confirmació de compra que consulta l'estat real del pagament a Stripe.
 - Avís legal, política de privacitat i condicions de compra.
 - Disseny responsive, animacions respectuoses amb `prefers-reduced-motion` i navegació accessible per seccions.
 
@@ -22,7 +63,7 @@ La web reuneix en un sol lloc la informació esportiva i els serveis digitals de
 La ruta `/admin` permet a la Junta:
 
 - Consultar ingressos, tiquets, comandes, despeses de gestió i altes de socis.
-- Crear, editar i cancel·lar esdeveniments.
+- Crear, editar i cancel·lar esdeveniments, amb pujada d'imatges.
 - Crear, editar i ocultar productes de la botiga.
 - Registrar cobraments manuals en efectiu.
 - Marcar altes com a domiciliades o anul·lades; els pagaments es concilien amb Stripe.
@@ -32,52 +73,77 @@ El calendari esportiu no es gestiona des del panell: és contingut oficial versi
 
 ## Stack tecnològic
 
-### Interfície
+| Capa | Tecnologia |
+|---|---|
+| Interfície | **Next.js 15** (App Router), **React 19**, **TypeScript**, **Tailwind CSS 3**, **Framer Motion**, Lucide React, `next/font` (Syne i Inter) |
+| 3D | **Three.js**, **React Three Fiber**, Drei i Postprocessing, carregats sota demanda quan la secció s'acosta a la pantalla |
+| Backend | **Route Handlers de Next.js**. El navegador no accedeix mai directament a Supabase ni rep la clau de servei |
+| Dades | **Supabase / PostgreSQL**, amb funcions transaccionals en PL/pgSQL i RLS |
+| Pagaments | **Stripe Checkout** i webhooks signats, amb suport per a mètodes immediats i asíncrons |
+| Integracions | **Google Apps Script** com a pont cap a Google Sheets i Gmail |
+| Desplegament | **Netlify**, amb funcions programades per a la conciliació i les notificacions |
+| Qualitat | Tests amb `node:test` i PostgreSQL en memòria (PGlite), i GitHub Actions |
 
-- **Next.js 15** amb App Router per a pàgines, layouts i rutes d'API.
-- **React 19** i **TypeScript**.
-- **Tailwind CSS 3** per al sistema visual responsive.
-- **Framer Motion** per a transicions, entrada inicial i microinteraccions.
-- **Three.js**, **React Three Fiber**, **Drei** i **React Three Postprocessing** per al camp tàctic 3D de la plantilla, carregat sota demanda quan la secció s'acosta a la pantalla.
-- **Lucide React** per a la iconografia.
-- `next/font` amb Syne i Inter.
+## Arquitectura
 
-### Backend i serveis
+```mermaid
+flowchart LR
+    U(["Afició i Junta<br/>navegador"])
+    CDN["Netlify CDN<br/>pàgines estàtiques"]
+    API["Next.js<br/>Route Handlers /api/*"]
+    DB[("Supabase<br/>PostgreSQL")]
+    ST["Stripe<br/>Checkout"]
+    FN["Funcions programades<br/>notificacions i conciliació"]
+    GAS["Google Apps Script"]
+    SH[("Google Sheets<br/>full de la Junta")]
+    GM["Gmail del club<br/>correus de confirmació"]
 
-- **Route Handlers de Next.js** com a backend. El navegador no accedeix directament a Supabase ni rep la seva clau de servei.
-- **Supabase/PostgreSQL** com a font de veritat per a esdeveniments, productes, compres i altes de socis.
-- **Stripe Checkout** per cobrar tiquets i marxandatge, amb verificació de preus i estoc al servidor.
-- **Webhooks de Stripe** per confirmar pagaments immediats i asíncrons, finalitzar reserves i recuperar inventari de sessions caducades o fallides.
-- **Google Apps Script** com a pont cap a Google Sheets i Gmail/MailApp: desa files al full de la Junta i envia correus des del compte del club.
-- **Netlify** com a entorn de desplegament i domini públic, amb el runtime oficial de Next.js.
-
-No s'utilitzen Radix UI, shadcn/ui, GSAP, Resend ni l'API directa de Google Sheets en la implementació actual.
-
-## Arquitectura i fluxos
-
-```text
-Navegador
-   │
-   ├── contingut versionat ──► calendari, plantilla i catàlegs base
-   │
-   └── /api/* (Next.js, servidor)
-          │
-          ├── Supabase ──► dades, preus, estoc i registres
-          ├── Stripe ──► Checkout i confirmació per webhook
-          └── Apps Script ──► Google Sheets + correus del club
+    U --> CDN
+    U --> API
+    API --> DB
+    API --> ST
+    ST -- "webhook signat" --> API
+    DB -- "cua de tasques" --> FN
+    FN -- "conciliació" --> ST
+    FN --> GAS
+    GAS --> SH
+    GAS --> GM
 ```
 
 ### Compra d'un producte o reserva d'un esdeveniment
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Navegador
+    participant C as /api/checkout
+    participant DB as Supabase
+    participant S as Stripe
+    participant W as /api/webhooks/stripe
+    participant F as Funció de notificacions
+    participant G as Apps Script
+
+    B->>C: producte, talla o nombre de tiquets
+    C->>DB: preu, estat i disponibilitat reals
+    C->>S: crea la sessió de pagament
+    C->>DB: reserva atòmica de places o estoc
+    C-->>B: URL de pagament, només si la reserva ha funcionat
+    B->>S: paga
+    S->>W: checkout.session.completed (signat)
+    W->>DB: transacció idempotent: reserva → compra + tasca
+    F->>DB: recull les tasques pendents
+    F->>G: fila al full i correu de confirmació
+```
+
 1. La interfície carrega el catàleg actiu des de `/api/products` o `/api/events`.
 2. `/api/checkout` valida les dades i torna a consultar a Supabase el preu, l'estat i la disponibilitat. No accepta com a fiable cap preu enviat pel navegador.
-3. El servidor crea una sessió de Stripe d'uns 30 minuts i reserva places o estoc a Supabase amb una operació atòmica. La URL de pagament només es retorna si la reserva ha funcionat.
-4. Stripe crida `/api/webhooks/stripe`; la signatura es verifica abans d'actualitzar res. `checkout.session.completed` confirma els mètodes immediats i `checkout.session.async_payment_succeeded` confirma els asíncrons.
+3. El servidor crea una sessió de Stripe d'uns 30 minuts i reserva places o estoc amb una operació atòmica. La URL de pagament només es retorna si la reserva ha funcionat.
+4. Stripe crida `/api/webhooks/stripe` i la signatura es verifica abans d'actualitzar res. `checkout.session.completed` confirma els mètodes immediats i `checkout.session.async_payment_succeeded`, els asíncrons.
 5. Una transacció idempotent converteix la reserva en una compra. Webhooks repetits i la pàgina `/success` poden coincidir sense duplicar files ni descomptar dues vegades.
-6. Si la sessió caduca o el pagament asíncron falla, es recupera exactament una vegada l'estoc reservat.
-7. La mateixa transacció crea una tasca de sincronització. Una funció de Netlify envia la fila i el correu a Apps Script amb identificador estable, reintents i control de duplicats. Si Google falla, la compra continua registrada i el panell mostra la incidència.
+6. Si la sessió caduca o el pagament asíncron falla, l'estoc reservat es recupera exactament una vegada.
+7. La mateixa transacció crea una tasca de sincronització. Una funció de Netlify l'envia a Apps Script amb un identificador estable, reintents i control de duplicats. Si Google falla, la compra continua registrada i el panell mostra la incidència.
 
-La pantalla `/success` consulta Stripe al servidor i només mostra **Pagament confirmat** quan `payment_status` és `paid`. Això és la confirmació del cobrament del comprador; no depèn del pagament posterior que Stripe fa al compte bancari del club. La resposta pública conté només el resum necessari i el correu emmascarat.
+La pantalla `/success` consulta Stripe al servidor i només mostra **Pagament confirmat** quan `payment_status` és `paid`. La resposta pública conté només el resum necessari i el correu emmascarat.
 
 ### Alta de soci
 
@@ -91,6 +157,18 @@ L'alta no cobra en línia. `/api/socis` valida les dades, desa el registre a `so
 - Supabase: esdeveniments publicats, productes, inventari, compres i altes.
 - `lib/squad.ts`: plantilla i estructura esportiva.
 
+## Seguretat i fiabilitat
+
+- **Preus i estoc decidits al servidor.** El navegador només indica què vol comprar.
+- **Webhooks de Stripe verificats per signatura** i processats de manera idempotent.
+- **Reserves d'inventari atòmiques** amb funcions PL/pgSQL, i una conciliació periòdica que allibera les sessions caducades.
+- **Sessions d'administració opaques**: token aleatori de 256 bits desat com a hash, cookie `httpOnly` i `SameSite=Strict`, caducitat i revocació. La contrasenya es compara en temps constant.
+- **Límit de peticions persistent** a PostgreSQL, basat en l'adreça que dona la plataforma i no en capçaleres que pugui falsificar el client.
+- **Permisos mínims a la base de dades**: RLS activat i funcions transaccionals reservades a la clau de servei.
+- **Protecció contra injecció de fórmules** al full de càlcul i a les exportacions CSV, i HTML escapat als correus.
+- **Capçaleres de seguretat**: CSP, protecció contra `iframe`, MIME sniffing i polítiques de referència i permisos restrictives.
+- **Tests de regressió** de pagaments, inventari, límits i sessions amb PostgreSQL en memòria, executats a cada push.
+
 ## Estructura principal
 
 ```text
@@ -98,12 +176,16 @@ app/                 Pàgines, panell d'administració i rutes API
 components/          Seccions públiques, modals, botiga i components 3D
 content/             Catàlegs versionats, inclòs el calendari
 lib/                 Domini, validació i integracions de servidor
+netlify/functions/   Funcions programades de notificacions i conciliació
 public/              Imatges optimitzades i recursos que sí pot servir el web
-assets/web-sources/  Originals locals ignorats per Git, per regenerar imatges optimitzades
-documents/           Fonts internes locals ignorades per Git, com el PDF federatiu
 apps-script/Codi.gs  Integració amb Google Sheets i correus
 supabase-schema.sql  Esquema inicial de la base de dades
+supabase/migrations/ Migracions posteriors
+tests/               Proves automatitzades
+docs/screenshots/    Captures d'aquest README
 ```
+
+Les carpetes `assets/` (originals d'imatge) i `documents/` (fonts internes) són locals i estan ignorades per Git.
 
 ## Posada en marxa local
 
@@ -120,7 +202,7 @@ supabase-schema.sql  Esquema inicial de la base de dades
 git clone https://github.com/Barru23/FC_JUNEDA_Web_Page.git
 cd FC_JUNEDA_Web_Page
 npm install
-copy .env.example .env.local
+cp .env.example .env.local
 npm run dev
 ```
 
@@ -164,9 +246,9 @@ El contacte canònic dels textos legals, el peu i els correus és `junedaclubfut
 | `NEXT_PUBLIC_SUPABASE_URL` | URL del projecte de Supabase. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Accés de servidor a la base de dades; mai no s'ha d'exposar al navegador. |
 | `APPS_SCRIPT_URL` | URL `/exec` del pont de Sheets i correus. |
-| `APPS_SCRIPT_TOKEN` | Secret compartit amb `Codi.gs`. |
+| `APPS_SCRIPT_TOKEN` | Secret compartit amb la propietat `TOKEN` de l'Apps Script. |
 | `NEXT_PUBLIC_MASTER_SHEET_ID` | Activa l'enllaç al full mestre dins l'administració. |
-| `ADMIN_PASSWORD` | Protegeix les rutes administratives actuals. |
+| `ADMIN_PASSWORD` | Protegeix les rutes administratives. |
 | `NEXT_PUBLIC_SITE_URL` | URL pública usada pel retorn de Stripe; a Netlify pot derivar-se de `URL`, però es declara explícitament. |
 
 Copia `.env.example` a `.env.local`, substitueix tots els valors de mostra i no versionis mai `.env.local` ni cap clau real.
@@ -174,11 +256,12 @@ Copia `.env.example` a `.env.local`, substitueix tots els valors de mostra i no 
 ## Ordres útils
 
 ```bash
-npm run dev       # servidor de desenvolupament
-npm run build     # build de producció
-npm run start     # executar el build
-npm run validate:calendar # validar les 30 jornades i els enfrontaments
-npx tsc --noEmit  # comprovació de tipus
+npm run dev                # servidor de desenvolupament
+npm test                   # proves automatitzades
+npm run build              # build de producció
+npm run start              # executar el build
+npm run validate:calendar  # validar les 30 jornades i els enfrontaments
+npm run typecheck          # comprovació de tipus
 ```
 
 ## Manteniment del calendari
@@ -199,14 +282,14 @@ Cada registre de `content/matches.json` conté:
 - `venue` només pot ser `home` o `away`.
 - Les jornades han d'estar ordenades i no es poden repetir.
 - Els canvis de la Federació s'han d'aplicar al fitxer i publicar amb un desplegament nou.
-- El PDF original es conserva només en local a `documents/Calendario_26_27.pdf` com a font interna del calendari. La carpeta està ignorada per Git i no se serveix des del web perquè també conté dades de contacte dels clubs.
+- El PDF original de la Federació es conserva només en local, perquè conté dades de contacte dels clubs.
 
 ## Qualitat i desplegament
 
-Abans de publicar:
+Cada push executa a GitHub Actions les proves, la validació del calendari i el build. Netlify torna a passar les proves abans de cada desplegament. En local:
 
 ```bash
-npx tsc --noEmit
+npm test
 npm run validate:calendar
 npm run build
 ```
@@ -222,32 +305,9 @@ El webhook de Stripe ha d'escoltar aquests quatre esdeveniments:
 
 ### Monitoratge
 
-Un monitor d'UptimeRobot consulta `https://cf-juneda.netlify.app/api/events`
-cada 5 minuts. L'objectiu no és només saber si el web respon: **el pla gratuït
-de Supabase pausa els projectes després d'una setmana sense activitat**, i cada
-consulta del monitor compta com a activitat. El risc real és el buit d'estiu,
-quan poden passar set dies sense cap visita.
+Un monitor extern consulta periòdicament una ruta que llegeix de la base de dades. Així avisa tant si cau la web com si cau Supabase, i l'activitat regular evita que el pla gratuït de Supabase pausi el projecte en les setmanes sense visites.
 
-La ruta escollida no és casual i **no s'ha de canviar per la portada**:
-
-- `/api/events` respon amb `Cache-Control: no-store`, així que cada petició
-  consulta Supabase de veritat en comptes de servir-se de la memòria cau.
-- Falla tancada amb un `503` si Supabase no respon, de manera que el monitor
-  avisa per correu.
-- La portada no serviria: és estàtica, se serveix del CDN i un monitor HTTP no
-  executa JavaScript, així que no arribaria mai a la base de dades. Un
-  `/#esdeveniments` encara menys, perquè el fragment posterior a `#` no
-  s'envia al servidor.
-
-Un sol monitor cobreix els dos riscos alhora: si cau Netlify, també falla.
-
-Quan salti l'alerta, comprova-ho en aquest ordre: si el projecte de Supabase
-està pausat (el cas més probable i el de solució més fàcil, amb **Restore
-project** al seu panell), si hi ha hagut un desplegament recent que hagi
-trencat res, i l'estat de Netlify.
-
-El cost en quota és petit: unes 8.640 invocacions de funció al mes, de les
-125.000 que inclou el pla gratuït de Netlify.
+Quan salti l'alerta, comprova-ho en aquest ordre: si el projecte de Supabase està pausat (el cas més probable, que es resol amb **Restore project** al seu panell), si un desplegament recent ha trencat res, i l'estat de Netlify.
 
 ### Revisió anual de conservació de dades
 
@@ -259,14 +319,19 @@ No hi ha cap esborrat automàtic, per evitar una eliminació irreversible per er
 4. Registrar la data, la persona responsable, els conjunts revisats i el resultat, sense copiar DNI, IBAN ni altres dades personals al registre de manteniment.
 5. Verificar des del panell que la temporada actual, els totals i les altes actives continuen correctes.
 
-### Qualitat tècnica incorporada
+### Altres detalls de qualitat
 
-- Capçalera CSP, protecció contra `iframe`, MIME sniffing, polítiques de referència i permisos restrictius.
 - `robots.txt`, `sitemap.xml`, icona, canonical, Open Graph, Twitter Cards i dades estructurades del club.
 - Modals amb focus inicial, bucle de teclat, tancament amb `Esc` i retorn del focus.
-- Originals pesants fora de `public/` i càrrega diferida del camp 3D.
+- Imatges optimitzades a WebP, originals pesants fora de `public/` i càrrega diferida del camp 3D.
 - El loader inicial amb l'escut forma part del disseny del club i es manté deliberadament.
+
+## Autoria i llicència
+
+Disseny i desenvolupament: **Gerard Barrufet Segarra** ([@Barru23](https://github.com/Barru23)).
+
+El codi es publica amb finalitats de portafoli, amb tots els drets reservats: vegeu [`LICENSE`](./LICENSE). El nom, l'escut, les equipacions i les imatges del Club Futbol Juneda i dels seus jugadors són propietat del club.
 
 ---
 
-**Som-hi Rojos! Això és Juneda.**
+<p align="center"><b>Som-hi Rojos! Això és Juneda.</b></p>
