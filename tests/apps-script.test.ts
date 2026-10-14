@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
 
-function app() {
+function app(token: string | null = 'test-token') {
   const tabs=new Map<string,any>(); const properties=new Map<string,string>(); let mails=0,failMail=false;
   function sheet() {
     const rows:any[][]=[];
@@ -16,7 +16,7 @@ function app() {
   }
   let locked=false;
   const context=vm.createContext({console,LockService:{getScriptLock:()=>({tryLock:()=>{locked=true;return true;},hasLock:()=>locked,releaseLock:()=>{locked=false;}})},
-    PropertiesService:{getScriptProperties:()=>({getProperty:(key:string)=>key==='TOKEN'?'test-token':properties.get(key),setProperty:(key:string,value:string)=>properties.set(key,value)})},
+    PropertiesService:{getScriptProperties:()=>({getProperty:(key:string)=>key==='TOKEN'?token:properties.get(key),setProperty:(key:string,value:string)=>properties.set(key,value)})},
     SpreadsheetApp:{getActiveSpreadsheet:()=>({getSheetByName:(name:string)=>tabs.get(name),insertSheet:(name:string)=>{const s=sheet();tabs.set(name,s);return s;}}),flush:()=>{}},
     ContentService:{MimeType:{JSON:'json'},createTextOutput:(text:string)=>({setMimeType:()=>JSON.parse(text)})},
   });
@@ -46,4 +46,9 @@ test('text fields cannot create spreadsheet formulas; amounts remain numeric',()
 });
 test('invalid token and old protocol write nothing',()=>{
   const a=app();assert.equal(a.request({token:'wrong'}).ok,false);assert.equal(a.request({protocol:1}).ok,false);assert.equal(a.tabs.size,0);
+});
+test('a missing TOKEN property rejects everything, including a null token',()=>{
+  const a=app(null);
+  for(const token of [null,undefined,'','test-token'])assert.equal(a.request({token}).ok,false);
+  assert.equal(a.tabs.size,0);assert.equal(a.mails(),0);
 });

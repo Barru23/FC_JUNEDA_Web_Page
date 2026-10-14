@@ -28,9 +28,13 @@
  * desplegaments → editar → Versió nova. Si en crees un de nou, la URL canvia.
  */
 
-// Es llegeix de les propietats de l'script; ha de coincidir amb APPS_SCRIPT_TOKEN
-// a Netlify. Si falta, cap petició no passa la comprovació de doPost.
-var TOKEN = PropertiesService.getScriptProperties().getProperty('TOKEN');
+// El token es llegeix de les propietats de l'script a cada petició; ha de
+// coincidir amb APPS_SCRIPT_TOKEN a Netlify. Si falta, es rebutja tot: sense
+// aquesta comprovació, una petició amb `"token": null` passaria per igual.
+function tokenValid_(rebut) {
+  var esperat = PropertiesService.getScriptProperties().getProperty('TOKEN');
+  return !!esperat && typeof rebut === 'string' && rebut === esperat;
+}
 
 // Adreça del club que apareix als correus com a contacte.
 var CONTACTE = 'junedaclubfutbol@gmail.com';
@@ -57,8 +61,7 @@ function doPost(e) {
   try {
     if (!e || !e.postData || !e.postData.contents || e.postData.contents.length > 20000) return resposta_({ok:false,error:'Petició no vàlida'});
     var dades = JSON.parse(e.postData.contents);
-    var configuredToken = PropertiesService.getScriptProperties().getProperty('TOKEN') || TOKEN;
-    if (dades.token !== configuredToken) return resposta_({ok:false,error:'Token no vàlid'});
+    if (!tokenValid_(dades.token)) return resposta_({ok:false,error:'Token no vàlid'});
     if (dades.protocol !== 2 || !/^(purchase|soci):[0-9a-f-]{36}$/.test(dades.sourceId || '')) return resposta_({ok:false,error:'Cal actualitzar el servidor al protocol 2'});
     var tipus=dades.type;
     if (!CAPCALERES[tipus]) return resposta_({ok:false,error:'Tipus desconegut'});
@@ -160,31 +163,6 @@ function resposta_(obj) {
 }
 
 // ─── Full de càlcul ──────────────────────────────────────────────────────────
-
-/**
- * Afegeix la fila al full indicat, creant-lo amb capçaleres si encara no
- * existeix. Així cada activitat nova estrena la seva pestanya sola, sense que
- * ningú l'hagi de preparar a mà.
- */
-function afegirFila_(nomFull, tipus, row) {
-  var llibre = SpreadsheetApp.getActiveSpreadsheet();
-  var nom = netejarNomFull_(nomFull || 'Registres');
-  var full = llibre.getSheetByName(nom);
-
-  var capcaleres = CAPCALERES[tipus] || CAPCALERES.event;
-
-  if (!full) {
-    full = llibre.insertSheet(nom);
-    escriureCapcaleres_(full, capcaleres);
-  } else if (full.getLastRow() === 0) {
-    // La pestanya existeix pero esta buida: probablement algu la va crear a ma.
-    // Sense capçaleres, les dades hi cauen sense cap titol a sobre.
-    escriureCapcaleres_(full, capcaleres);
-  }
-
-  full.appendRow(fila_(tipus, row));
-  return full.getLastRow();
-}
 
 /** Fila de capçaleres en negreta, congelada i amb les columnes ajustades. */
 function escriureCapcaleres_(full, capcaleres) {
