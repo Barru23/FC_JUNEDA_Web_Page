@@ -9,6 +9,12 @@ export function reservationAction(session: { status: string | null; payment_stat
   return "wait";
 }
 
+// La funcio programada corre cada 15 minuts: els lots son el triple dels que hi
+// havia quan corria cada 5, per revisar el mateix nombre de reserves i pagaments
+// per hora. El termini de 22 s talla el bucle abans del limit de la funcio.
+const RESERVATIONS_PER_RUN = 15;
+const PAYMENTS_PER_RUN = 6;
+
 export async function reconcile(): Promise<{ skipped?: boolean; checked: number; errors: number }> {
   const db=getSupabaseAdmin();
   const claim=await db.rpc("claim_maintenance");
@@ -23,7 +29,7 @@ export async function reconcile(): Promise<{ skipped?: boolean; checked: number;
     const cursorUpdate=await db.from("maintenance_state").update({cursor}).eq("name","reconcile");
     if(cursorUpdate.error) throw cursorUpdate.error;
     const pending=await db.from("checkout_reservations").select("stripe_session_id")
-      .eq("status","reserved").order("checked_at",{ascending:true,nullsFirst:true}).limit(5);
+      .eq("status","reserved").order("checked_at",{ascending:true,nullsFirst:true}).limit(RESERVATIONS_PER_RUN);
     if(pending.error) throw pending.error;
     for(const row of pending.data ?? []) {
       if(Date.now()>deadline-8000) break;
@@ -40,7 +46,7 @@ export async function reconcile(): Promise<{ skipped?: boolean; checked: number;
     }
     if(Date.now()<deadline-8000) {
       const unpaidFees=await db.from("purchases").select("id,stripe_payment_id")
-        .like("stripe_payment_id","pi_%").order("financial_checked_at",{ascending:true,nullsFirst:true}).limit(2);
+        .like("stripe_payment_id","pi_%").order("financial_checked_at",{ascending:true,nullsFirst:true}).limit(PAYMENTS_PER_RUN);
       if(unpaidFees.error) throw unpaidFees.error;
       for(const p of unpaidFees.data ?? []) {
         if(Date.now()>deadline-7000) break;

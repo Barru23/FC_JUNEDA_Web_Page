@@ -5,4 +5,6 @@ export default async () => {
   console.info("[Maintenance]", result);
   return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
 };
-export const config = { schedule: "*/5 * * * *" };
+// Xarxa de seguretat dels webhooks de Stripe: cada 15 minuts n'hi ha prou i
+// gasta un terc dels credits de Netlify que cada 5.
+export const config = { schedule: "*/15 * * * *" };
