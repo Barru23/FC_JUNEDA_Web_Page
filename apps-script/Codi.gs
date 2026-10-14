@@ -1,7 +1,7 @@
 /**
  * CF Juneda — pont entre la web i el full de càlcul de la Junta.
  *
- * La web (Vercel) fa un POST aquí cada cop que es confirma una compra. Aquest
+ * La web (Netlify) fa un POST aquí cada cop que es confirma una compra. Aquest
  * script fa dues coses que abans requerien dos serveis externs: escriu la fila
  * al full corresponent (abans, l'API de Google Sheets amb un compte de servei)
  * i envia el correu de confirmació al comprador (abans, Resend).
@@ -13,22 +13,24 @@
  * ─── Com desplegar-ho ────────────────────────────────────────────────────────
  *  1. Obre el full de càlcul mestre a Google Sheets.
  *  2. Extensions → Apps Script. Esborra el que hi hagi i enganxa aquest fitxer.
- *  3. Canvia TOKEN per una contrasenya llarga inventada (l'única cosa que
- *     impedeix que algú altre escrigui files si descobreix la URL).
+ *  3. Configuració del projecte → Propietats de l'script: crea `TOKEN` amb una
+ *     contrasenya llarga i aleatòria (l'única cosa que impedeix que algú altre
+ *     escrigui files si descobreix la URL). Mai no s'escriu en aquest fitxer.
  *  4. Desa i fes Desplega → Nou desplegament → tipus «Aplicació web»:
  *       · Executa com a: Jo
  *       · Qui hi té accés: Qualsevol
- *     («Qualsevol» és obligatori: ni Vercel ni Stripe es poden autenticar
+ *     («Qualsevol» és obligatori: ni Netlify ni Stripe es poden autenticar
  *     contra Google. Per això hi ha el token.)
- *  5. Copia la URL /exec i posa-la a Vercel com a APPS_SCRIPT_URL, i el mateix
+ *  5. Copia la URL /exec i posa-la a Netlify com a APPS_SCRIPT_URL, i el mateix
  *     token com a APPS_SCRIPT_TOKEN.
  *
  * Cada cop que modifiquis aquest fitxer cal fer Desplega → Gestiona
  * desplegaments → editar → Versió nova. Si en crees un de nou, la URL canvia.
  */
 
-// ⚠️ CANVIA AIXÒ abans de desplegar. Ha de coincidir amb APPS_SCRIPT_TOKEN a Vercel.
-var TOKEN = 'CANVIA_EM_PER_UNA_CONTRASENYA_LLARGA';
+// Es llegeix de les propietats de l'script; ha de coincidir amb APPS_SCRIPT_TOKEN
+// a Netlify. Si falta, cap petició no passa la comprovació de doPost.
+var TOKEN = PropertiesService.getScriptProperties().getProperty('TOKEN');
 
 // Adreça del club que apareix als correus com a contacte.
 var CONTACTE = 'junedaclubfutbol@gmail.com';

@@ -147,7 +147,7 @@ Aplica també les migracions de `supabase/migrations/` en ordre. La posada en ma
 
 1. Obre el full mestre de la Junta i entra a **Extensions → Apps Script**.
 2. Copia-hi `apps-script/Codi.gs`.
-3. Substitueix el valor de `TOKEN` per un secret llarg i exclusiu.
+3. A **Configuració del projecte → Propietats de l'script**, crea la propietat `TOKEN` amb un secret llarg i exclusiu. El secret no s'escriu mai a `Codi.gs`.
 4. Desplega l'script com a aplicació web, executada pel propietari i accessible per a qualsevol persona.
 5. Desa la URL `/exec` a `APPS_SCRIPT_URL` i el mateix secret a `APPS_SCRIPT_TOKEN`.
 6. Després de cada canvi a l'script, publica una versió nova del desplegament.
