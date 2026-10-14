@@ -223,7 +223,7 @@ També inclou les funcions transaccionals de reserva, confirmació i alliberamen
 
 Després d'una actualització de `supabase-schema.sql`, executa'l **abans de desplegar el codi que utilitza les funcions noves**. L'script es pot tornar a executar (`IF NOT EXISTS`, `CREATE OR REPLACE` i llavors amb conflicte controlat).
 
-Aplica també les migracions de `supabase/migrations/` en ordre. La posada en marxa de la conciliació, les sessions i la cua de notificacions es descriu a [PRODUCCIO.md](PRODUCCIO.md).
+Aplica també les migracions de `supabase/migrations/` en ordre. La posada en marxa de la conciliació, les sessions i la cua de notificacions es descriu a [docs/PRODUCCIO.md](docs/PRODUCCIO.md).
 
 ### Google Apps Script
 
@@ -294,7 +294,7 @@ npm run validate:calendar
 npm run build
 ```
 
-Configura a Netlify les mateixes variables d'entorn, registra el webhook de producció de Stripe apuntant al domini de Netlify i confirma que Apps Script respon a la seva URL `/exec`. El procés complet de migració i la llista de comprovació són a [`MIGRACIO_NETLIFY.md`](./MIGRACIO_NETLIFY.md).
+Configura a Netlify les mateixes variables d'entorn, registra el webhook de producció de Stripe apuntant al domini de Netlify i confirma que Apps Script respon a la seva URL `/exec`. El projecte de Netlify ha de tenir la visibilitat pública: els projectes nous són privats per defecte i el webhook rebria un 401. Els canvis de variables només arriben a les funcions amb un desplegament nou.
 
 El webhook de Stripe ha d'escoltar aquests quatre esdeveniments:
 
