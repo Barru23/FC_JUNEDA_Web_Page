@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getMembershipTier } from "@/lib/memberships";
+import { PUBLIC_CATALOGUE_HEADERS } from "@/lib/request-security";
 
 export async function GET() {
   try {
@@ -14,7 +15,7 @@ export async function GET() {
         target: description?.target ?? "", description: description?.description ?? "",
         benefits: description?.benefits ?? (row.benefits ? [row.benefits] : []),
       };
-    }), { headers: { "Cache-Control": "no-store" } });
+    }), { headers: PUBLIC_CATALOGUE_HEADERS });
   } catch {
     return NextResponse.json({ error: "No s'han pogut carregar les modalitats. Torna-ho a provar." }, { status: 503 });
   }

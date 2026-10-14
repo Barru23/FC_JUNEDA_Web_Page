@@ -45,6 +45,15 @@ export async function limitRequest(req: NextRequest, scope: string, limit: numbe
   return null;
 }
 
+// Els catalegs publics es guarden uns segons a la CDN de Netlify: un bucle de
+// peticions anonimes ja no gasta una invocacio de funcio ni una consulta a
+// Supabase cadascuna. El checkout torna a llegir preu i places, aixi que una
+// llista de fa 30 segons no pot vendre res que no hi sigui.
+export const PUBLIC_CATALOGUE_HEADERS = {
+  "Cache-Control": "public, max-age=0, must-revalidate",
+  "Netlify-CDN-Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+};
+
 export class RequestError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }

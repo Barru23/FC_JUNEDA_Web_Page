@@ -7,7 +7,7 @@ import type { ClubEvent } from "@/lib/data";
 import { Modal } from "@/components/ui/Modal";
 import { serviceFeeEur } from "@/lib/fees";
 import { ConsentCheckbox, LegalLink } from "@/components/legal/ConsentCheckbox";
-import { salesOpen } from "@/lib/event-status";
+import { MAX_TICKETS_PER_ORDER, salesOpen } from "@/lib/event-status";
 
 const DIETARY_OPTIONS = [
   "Cap intolerancia",
@@ -163,7 +163,7 @@ export function BookingDrawer({
                   </button>
                   <span className="font-display text-lg font-bold">{quantity}</span>
                   <button
-                    onClick={() => setQuantity((q) => Math.min(event.spotsLeft, q + 1))}
+                    onClick={() => setQuantity((q) => Math.min(event.spotsLeft, MAX_TICKETS_PER_ORDER, q + 1))}
                     className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-lg"
                     aria-label="Més tiquets"
                   >

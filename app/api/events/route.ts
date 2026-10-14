@@ -2,6 +2,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
 import type { DbEvent } from "@/lib/supabase";
 import { syncEventCatalogue, mapDbEvent } from "@/lib/events";
+import { PUBLIC_CATALOGUE_HEADERS } from "@/lib/request-security";
 
 // GET /api/events — public list of every sellable event in Supabase. The JSON
 // catalogue only seeds legacy events; events created from /admin are immediately
@@ -20,9 +21,7 @@ export async function GET() {
     if (error) throw error;
 
     const rows = (data ?? []) as DbEvent[];
-    return NextResponse.json(rows.map(mapDbEvent), {
-      headers: { "Cache-Control": "no-store" },
-    });
+    return NextResponse.json(rows.map(mapDbEvent), { headers: PUBLIC_CATALOGUE_HEADERS });
   } catch (err) {
     console.error("[Events] Supabase unavailable:", err);
     return NextResponse.json({ error: "No s'han pogut carregar els esdeveniments" }, {

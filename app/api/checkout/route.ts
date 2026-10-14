@@ -5,6 +5,13 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { serviceFeeCents } from "@/lib/fees";
 import { getSiteUrl } from "@/lib/site-url";
 import { limitRequest, readJson, RequestError, sameOrigin } from "@/lib/request-security";
+import { MAX_TICKETS_PER_ORDER } from "@/lib/event-status";
+
+// Sessions de Stripe creades per IP durant la vida d'una reserva (31 min). Es
+// compten nomes les que arriben a reservar inventari, no els errors de
+// formulari. El marxandatge va d'una en una unitat, per aixo en permet mes.
+const HOLD_WINDOW_SECONDS = 31 * 60;
+const MAX_HOLDS = { event: 3, merch: 6 } as const;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -122,7 +129,7 @@ export async function POST(req: NextRequest) {
     // Event ticket. Supabase is the price and availability source of truth.
     if (type === "event") {
       const ticketQuantity = Number(quantity);
-      if (!eventId || !Number.isInteger(ticketQuantity) || ticketQuantity < 1 || ticketQuantity > 20) {
+      if (!eventId || !Number.isInteger(ticketQuantity) || ticketQuantity < 1 || ticketQuantity > MAX_TICKETS_PER_ORDER) {
         return NextResponse.json({ error: "Dades de l'esdeveniment no vàlides" }, { status: 400 });
       }
 
@@ -260,6 +267,14 @@ export async function POST(req: NextRequest) {
       fee_eur: (feeCents / 100).toFixed(2),
     };
 
+    if (!reservation) throw new Error("No s'ha pogut determinar l'inventari del checkout");
+    // Sostre de reserves obertes per IP: sense ell, un bucle de peticions valides
+    // deixaria l'esdeveniment sense places durant mitja hora, i de nou despres.
+    const holdLimited = await limitRequest(
+      req, `checkout-hold-${reservation.type}`, MAX_HOLDS[reservation.type], HOLD_WINDOW_SECONDS,
+    );
+    if (holdLimited) return holdLimited;
+
     // Stripe exigeix un minim de 30 minuts. En reservem 31 per absorbir els
     // segons que passen entre calcular la data i crear la sessio.
     const expiresAt = Math.floor(Date.now() / 1000) + 31 * 60;
@@ -276,11 +291,6 @@ export async function POST(req: NextRequest) {
       locale: "auto",
       expires_at: expiresAt,
     });
-
-    if (!reservation) {
-      await expireUnusedSession(session.id);
-      throw new Error("No s'ha pogut determinar l'inventari del checkout");
-    }
 
     // La URL nomes surt del servidor quan la reserva atomica ja ha restat
     // places/estoc. Si dos compradors intenten agafar l'ultima unitat, nomes

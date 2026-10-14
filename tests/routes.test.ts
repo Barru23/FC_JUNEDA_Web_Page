@@ -28,9 +28,29 @@ test("sold-out merchandise is visible but cannot create a checkout, even with st
     return json([{id:'shirt',slug:'1a-equipacio',status:'out_of_stock',sizes:['M'],stock:{M:10},image_url:null}]);
   });
   const catalogue=await products();assert.equal(catalogue.status,200);
+  assert.match(catalogue.headers.get('netlify-cdn-cache-control')??'',/s-maxage=\d+/);
   assert.equal((await catalogue.json())[0].status,'out_of_stock');
   const rejected=await checkout(request('/api/checkout',{type:'merch',productId:'1a-equipacio',size:'M',guestName:'Test local',email:'test@example.com'}));
   assert.equal(rejected.status,409);assert.equal(queries,2);
+});
+
+test("event checkout caps tickets per order and open holds per client before reaching Stripe",async t=>{
+  const scopes:string[]=[];
+  t.mock.method(globalThis,"fetch",async(input:RequestInfo|URL,init?:RequestInit)=>{
+    const url=new URL(String(input));assert.equal(url.hostname,'database.example');
+    if(url.pathname.includes('consume_request_limit')){
+      scopes.push(JSON.parse(String(init?.body)).p_key);
+      // The general limiter lets the request in; the hold limiter is already full.
+      return json([{allowed:scopes.length%2===1,retry_after:60}]);
+    }
+    assert.ok(url.pathname.endsWith('/events'));
+    return json([{id:'00000000-0000-4000-8000-000000000001',status:'active',spots_remaining:100,price_eur:15,title:'Dinar',date:'2026-11-01',location:'Juneda'}]);
+  });
+  const body={type:'event',eventId:'dinar',guestName:'Test local',email:'test@example.com'};
+  assert.equal((await checkout(request('/api/checkout',{...body,quantity:11}))).status,400);
+  scopes.length=0;
+  const held=await checkout(request('/api/checkout',{...body,quantity:10}));
+  assert.equal(held.status,429);assert.equal(scopes.length,2);assert.notEqual(scopes[0],scopes[1]);
 });
 
 test("membership rejects invented tiers, oversized fields, bots and missing consent without inserting",async t=>{
